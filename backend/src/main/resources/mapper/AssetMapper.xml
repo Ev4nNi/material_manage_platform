@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.material.platform.mapper.AssetMapper">
+
+    <resultMap id="AssetResultMap" type="com.material.platform.entity.Asset">
+        <id column="id" property="id"/>
+        <result column="folder_id" property="folderId"/>
+        <result column="original_name" property="originalName"/>
+        <result column="storage_key" property="storageKey"/>
+        <result column="file_type" property="fileType"/>
+        <result column="file_size" property="fileSize"/>
+        <result column="upload_date" property="uploadDate"/>
+        <result column="metadata" property="metadata"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <select id="selectByDateRange" resultMap="AssetResultMap">
+        SELECT id, folder_id, original_name, storage_key, file_type, file_size,
+               upload_date, metadata, created_at
+        FROM assets
+        WHERE upload_date &gt;= #{startDate}
+          AND upload_date &lt;= #{endDate}
+        ORDER BY upload_date DESC
+    </select>
+
+</mapper>

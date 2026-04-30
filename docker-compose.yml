@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: material-backend
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - APP_PORT=8080
+      - STORAGE_PATH=/data/storage
+      - DB_PATH=/data/db/material.db
+      - LOG_PATH=/data/logs/application.log
+    volumes:
+      - /data2/material_manage_platform/storage:/data/storage
+      - /data2/material_manage_platform/db:/data/db
+      - /data2/material_manage_platform/logs:/data/logs
+    networks:
+      - material-net
+    healthcheck:
+      test: "wget -q -O - http://localhost:8080/api/auth/me || true"
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    container_name: material-frontend
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - material-net
+
+networks:
+  material-net:
+    driver: bridge

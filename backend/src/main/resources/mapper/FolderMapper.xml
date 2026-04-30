@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.material.platform.mapper.FolderMapper">
+
+    <resultMap id="FolderResultMap" type="com.material.platform.entity.Folder">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+</mapper>
