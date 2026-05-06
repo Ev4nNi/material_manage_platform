@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -18,6 +19,7 @@ public class DatabaseMigrationRunner {
     public void migrateUsersTable() {
         migrateUsersRoleColumn();
         migrateAssetsUploadedByColumn();
+        migrateAssetsPublicIdColumn();
     }
 
     private void migrateUsersRoleColumn() {
@@ -44,5 +46,30 @@ public class DatabaseMigrationRunner {
             jdbcTemplate.execute("ALTER TABLE assets ADD COLUMN uploaded_by TEXT DEFAULT 'admin'");
             jdbcTemplate.execute("UPDATE assets SET uploaded_by = 'admin' WHERE uploaded_by IS NULL OR uploaded_by = ''");
         }
+
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_assets_uploaded_by ON assets(uploaded_by)");
+    }
+
+    private void migrateAssetsPublicIdColumn() {
+        List<Map<String, Object>> columns = jdbcTemplate.queryForList("PRAGMA table_info(assets)");
+        boolean hasPublicIdColumn = columns.stream()
+                .map(column -> String.valueOf(column.get("name")))
+                .anyMatch("public_id"::equalsIgnoreCase);
+
+        if (!hasPublicIdColumn) {
+            jdbcTemplate.execute("ALTER TABLE assets ADD COLUMN public_id TEXT");
+        }
+
+        List<Map<String, Object>> assetsWithoutPublicId = jdbcTemplate.queryForList(
+                "SELECT id FROM assets WHERE public_id IS NULL OR public_id = ''");
+        for (Map<String, Object> asset : assetsWithoutPublicId) {
+            jdbcTemplate.update(
+                    "UPDATE assets SET public_id = ? WHERE id = ?",
+                    UUID.randomUUID().toString(),
+                    asset.get("id")
+            );
+        }
+
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_public_id ON assets(public_id)");
     }
 }

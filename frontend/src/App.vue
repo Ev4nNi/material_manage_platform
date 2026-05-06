@@ -881,7 +881,7 @@ function handlePreview(asset) {
 
 function handleDownload(asset) {
   const token = localStorage.getItem('token')
-  const url = `/api/assets/${asset.id}/download?token=${token}`
+  const url = `/api/assets/${assetRef(asset)}/download?token=${token}`
   const link = document.createElement('a')
   link.href = url
   link.download = asset.originalName
@@ -892,7 +892,7 @@ function handleDownload(asset) {
 
 async function handleDelete(asset) {
   try {
-    await assetApi.deleteAsset(asset.id)
+    await assetApi.deleteAsset(assetRef(asset))
     ElMessage.success('删除成功')
     await loadAssets()
   } catch (error) {
@@ -942,7 +942,7 @@ async function submitMove() {
 
   try {
     await Promise.all(
-      assetsToMove.map(asset => assetApi.updateAsset(asset.id, { folderId: moveTargetFolderId.value }))
+      assetsToMove.map(asset => assetApi.updateAsset(assetRef(asset), { folderId: moveTargetFolderId.value }))
     )
     moveDialogVisible.value = false
     clearSelection()
@@ -965,7 +965,7 @@ async function batchDelete() {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    await Promise.all(selectedAssets.value.map(asset => assetApi.deleteAsset(asset.id)))
+    await Promise.all(selectedAssets.value.map(asset => assetApi.deleteAsset(assetRef(asset))))
     clearSelection()
     await loadAssets()
     ElMessage.success('批量删除成功')
@@ -983,8 +983,8 @@ async function batchDownload() {
   }
 
   try {
-    const assetIds = selectedAssets.value.map(asset => asset.id)
-    const res = await assetApi.batchDownload(assetIds)
+    const assetRefs = selectedAssets.value.map(asset => assetRef(asset))
+    const res = await assetApi.batchDownload(assetRefs)
     if (res && res.data) {
       const urls = res.data
       const token = localStorage.getItem('token') || ''
@@ -1336,8 +1336,12 @@ function isImage(type) {
   return type === 'image'
 }
 
+function assetRef(asset) {
+  return asset?.publicId || asset?.id
+}
+
 function previewUrl(asset) {
-  return `/api/assets/${asset.id}/preview`
+  return `/api/assets/${assetRef(asset)}/preview`
 }
 
 function getUploaderDisplayName(username) {

@@ -1,274 +1,319 @@
 # 素材管理平台
 
-轻量级图片和视频素材管理平台，支持文件夹组织、批量操作、元数据提取和预览功能。
+轻量级图片和视频素材管理平台，支持文件夹组织、批量操作、元数据提取、预览和下载。
 
 ## 系统简介
 
-素材管理平台是一个基于 Spring Boot 3.x 和 Vue 3 构建的全栈应用，用于高效管理图片和视频素材。系统提供直观的文件夹树结构组织素材，支持批量上传、移动、删除等操作，并自动提取素材元数据（尺寸、时长等）。
+本项目基于 Spring Boot 3.x 和 Vue 3 构建，用于管理图片、视频等素材文件。系统提供目录树组织、单文件和整目录上传、批量移动与删除、素材筛选、元数据提取、预览和下载等能力。
 
-### 核心特性
+## 核心能力
 
-- **文件夹管理**: 无限层级嵌套的文件夹结构，支持创建、重命名、删除文件夹
-- **素材上传**: 支持单文件上传和整文件夹上传，自动保留目录结构
-- **批量操作**: 多选素材进行批量移动或删除
-- **元数据提取**: 自动提取图片尺寸、视频时长等关键信息
-- **素材预览**: 内置图片和视频预览功能
-- **用户管理**: 管理员可管理用户账号和权限（ADMIN/USER）
-- **分页查询**: 支持分页显示和总数统计
+- 文件夹管理：支持多级目录、创建、重命名、删除。
+- 素材上传：支持单文件上传和整目录上传，保留相对路径。
+- 批量操作：支持批量移动、批量删除、批量下载。
+- 元数据提取：自动提取图片尺寸、视频基础信息。
+- 在线预览：支持图片和视频直接预览。
+- 用户管理：支持管理员和普通用户。
 
-### 技术栈
+## 技术栈
 
-**后端**:
+**后端**
 
 - Java 17
 - Spring Boot 3.x
-- Undertow (替代 Tomcat)
-- SQLite 数据库
-- MyBatis-Plus ORM
-- BCrypt 密码加密
+- Undertow
+- MyBatis-Plus
+- SQLite
 
-**前端**:
+**前端**
 
-- Vue 3 (Composition API)
-- Element Plus UI 组件库
-- Axios HTTP 客户端
-- Vite 构建工具
+- Vue 3
+- Element Plus
+- Axios
+- Vite
 
 ## 快速开始
 
 ### 环境要求
 
 - Java 17
-- Node.js 18+
 - Maven 3.6+
-- Docker 20.10+ (Docker 部署时)
+- Node.js 18+
 
-### 开发模式启动
-
-#### 后端
+### 启动后端
 
 ```bash
 cd backend
-
-# 使用 Maven 启动
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
-
-# 或使用脚本
-scripts\run-dev.bat   # Windows
-./scripts/run-dev.sh  # Linux/Mac
 ```
 
-后端运行在 `http://localhost:8080`
+或使用脚本：
 
-#### 前端
+```bash
+scripts\run-dev.bat
+```
+
+后端默认地址：`http://localhost:8080`
+
+### 启动前端
 
 ```bash
 cd frontend
-
 npm install
 npm run dev
 ```
 
-前端运行在 `http://localhost:3000`
+前端默认地址：`http://localhost:3000`
 
 ### Docker 部署
 
-详细部署指南请参阅 [DEPLOYMENT.md](DEPLOYMENT.md)
+详细说明见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ```bash
-# 构建并启动所有服务
 docker-compose up -d --build
-
-# 服务地址
-# 前端: http://localhost:3001
-# 后端 API: http://localhost:8081
 ```
 
-### 首次登录
+默认地址：
 
-打开浏览器访问前端地址，使用默认管理员账号登录：
+- 前端：`http://localhost:3001`
+- 后端 API：`http://localhost:8081`
 
-- **用户名**: `admin`
-- **密码**: `admin123`
+### 默认账号
 
-## 功能操作指南
+- 用户名：`admin`
+- 密码：`admin123`
 
-### 文件夹管理
+## 素材标识说明
 
-1. **创建根文件夹**: 点击左侧文件夹面板右上角的「新建」按钮
-2. **创建子文件夹**: 右键点击目标文件夹，选择「新建子文件夹」
-3. **重命名文件夹**: 右键点击目标文件夹，选择「重命名」
-4. **删除文件夹**: 右键点击目标文件夹，选择「删除」（需确保文件夹为空）
+素材表同时存在两类标识：
 
-### 素材上传
+- `id`：数据库内部自增主键。
+- `publicId`：对外使用的随机公开标识，上传时自动生成。
 
-1. **选择目标文件夹**: 在左侧文件夹树中点击目标文件夹
-2. **上传文件**: 点击「上传文件」按钮，选择一个或多个文件
-3. **上传文件夹**: 点击「上传文件夹」按钮，选择整个文件夹（自动保留目录结构）
+接口兼容规则：
 
-**支持的文件格式**:
+- 新接口和前端页面优先使用 `publicId`。
+- 历史数据和旧调用仍兼容数字 `id`。
+- 文档中的 `{assetRef}` 表示可传 `publicId`，也可传旧的数字 `id`。
 
-- 图片: JPG, JPEG, PNG, GIF, WEBP, BMP
-- 视频: MP4, AVI, MOV, MKV, WEBM
+推荐：
 
-**上传限制**: 单个文件最大 500MB
+- 对外链接、下载链接、预览链接、详情接口统一使用 `publicId`。
+- 不要把数据库自增 `id` 暴露成长期稳定的公开资源地址。
 
-### 素材管理
+## 常用操作
 
-- **预览**: 点击素材行右侧的「预览」按钮
-- **下载**: 点击「下载」按钮下载素材文件
-- **移动**: 点击「移动」按钮选择目标文件夹，支持批量移动
-- **删除**: 点击「删除」按钮，支持批量删除
-- **筛选**: 使用日期范围、文件类型、上传者等条件筛选
+### 上传素材
 
-### 用户管理（仅管理员）
+1. 在左侧目录树中选择目标文件夹。
+2. 点击“上传文件”选择单个或多个文件。
+3. 点击“上传文件夹”可整目录导入，系统会保留原始目录结构。
 
-1. **切换视图**: 点击顶部导航栏的「用户管理」标签
-2. **新建用户**: 点击「新建用户」按钮
-3. **编辑用户**: 点击用户行的「编辑」按钮
-4. **重置密码**: 点击用户行的「重置密码」按钮
-5. **删除用户**: 点击用户行的「删除」按钮
+支持格式：
 
-## 项目结构
+- 图片：`jpg` `jpeg` `png` `gif` `webp` `bmp`
+- 视频：`mp4` `avi` `mov` `mkv` `webm`
 
-```
+默认限制：
+
+- 单文件最大 `500MB`
+
+### 管理素材
+
+- 预览：在线查看图片或视频。
+- 下载：直接下载原文件。
+- 移动：可单个或批量移动到其他文件夹。
+- 删除：可单个或批量删除。
+- 筛选：支持按日期、类型、上传者、文件名筛选。
+
+## 目录结构
+
+```text
 material_manage_platform/
-├── backend/                    # 后端代码
-│   ├── src/main/java/
-│   │   └── com/material/platform/
-│   │       ├── common/        # 公共类
-│   │       ├── config/        # 配置类
-│   │       ├── controller/    # REST 控制器
-│   │       ├── dto/           # 数据传输对象
-│   │       ├── entity/        # 数据库实体
-│   │       ├── mapper/        # MyBatis Mapper
-│   │       ├── metadata/     # 元数据提取器
-│   │       ├── service/       # 业务逻辑层
-│   │       └── storage/       # 存储实现
+├── backend/
+│   ├── src/main/java/com/material/platform/
+│   │   ├── common/
+│   │   ├── config/
+│   │   ├── controller/
+│   │   ├── dto/
+│   │   ├── entity/
+│   │   ├── mapper/
+│   │   ├── metadata/
+│   │   ├── service/
+│   │   └── storage/
 │   ├── src/main/resources/
-│   │   ├── db/schema.sql      # 数据库建表语句
-│   │   └── mapper/            # MyBatis XML
+│   │   ├── db/schema.sql
+│   │   └── mapper/
 │   └── pom.xml
-├── frontend/                   # 前端代码
+├── frontend/
 │   ├── src/
-│   │   ├── api/              # API 请求封装
-│   │   ├── App.vue           # 主组件
-│   │   └── main.js           # 入口文件
 │   ├── package.json
 │   └── vite.config.js
-├── docker-compose.yml          # Docker Compose 配置
-├── DEPLOYMENT.md              # 部署指南
+├── docker-compose.yml
+├── DEPLOYMENT.md
 └── README.md
 ```
 
 ## 数据库
 
-使用 SQLite 数据库，文件位于 `backend/data/material.db`
+默认使用 SQLite，数据库文件位于：
 
-### 主要表结构
+`backend/data/material.db`
 
-- **folders**: 文件夹表
-- **assets**: 素材表
-- **users**: 用户表
+主要表：
 
-## 部署
+- `folders`：文件夹表
+- `assets`：素材表
+- `users`：用户表
 
-详细部署步骤请参阅 [DEPLOYMENT.md](DEPLOYMENT.md)
+`assets` 关键字段：
+
+- `id`：自增主键
+- `public_id`：对外公开标识，唯一
+- `storage_key`：存储路径键，唯一
+- `uploaded_by`：上传者
+
+## 认证方式
+
+当前后端使用服务端 Session 认证，不是 Bearer Token 模式。
+
+认证流程：
+
+1. 调用 `/api/auth/login`
+2. 服务端在 Session 中写入登录用户
+3. 后续请求通过 `JSESSIONID` Cookie 维持登录态
+
+除 `/api/auth/login` 外，其余 `/api/**` 接口都要求已登录。
+
+请求示例：
+
+```text
+Cookie: JSESSIONID=xxx
+```
+
+前端浏览器场景下，登录成功后会自动携带 Cookie，无需手动追加 `Authorization` 头。
 
 ## API 文档
 
-### 认证
+### 通用返回结构
 
-所有接口（除登录外）需要在请求头或 Cookie 中携带 token：
+除文件预览和文件下载接口外，其余接口统一返回：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
 ```
-Cookie: JSESSIONID=xxx
-或
-Header: Authorization: Bearer <token>
+
+分页列表返回结构：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "records": [],
+    "total": 0,
+    "pageNum": 1,
+    "pageSize": 20
+  }
+}
 ```
 
 ### 素材接口 `/api/assets`
 
-| 方法 | 路径 | 说明 | 参数 |
+| 方法 | 路径 | 说明 | 参数 / 请求体 |
 |------|------|------|------|
-| GET | `/api/assets` | 分页查询素材 | `folderId`, `pageNum`, `pageSize`, `startDate`, `endDate`, `fileType`, `uploadedBy`, `fileName` |
-| GET | `/api/assets/{id}` | 获取素材详情 | - |
-| GET | `/api/assets/{id}/preview` | 预览素材（浏览器内嵌） | - |
-| GET | `/api/assets/{id}/download` | 下载素材文件 | - |
-| POST | `/api/assets/upload` | 上传素材 | `file`(file), `folderId`, `relativePath`(可选) |
-| POST | `/api/assets/upload-directory` | 批量上传目录 | `files`(file[]), `relativePaths`(string[]), `folderId` |
-| PUT | `/api/assets/{id}` | 更新素材信息 | `originalName`, `folderId` |
-| DELETE | `/api/assets/{id}` | 删除素材 | - |
+| GET | `/api/assets` | 分页查询素材 | Query: `folderId` 或 `startDate + endDate`，以及 `pageNum`, `pageSize`, `fileType`, `uploadedBy`, `fileName` |
+| GET | `/api/assets/{assetRef}` | 获取素材详情 | `assetRef` 推荐传 `publicId` |
+| GET | `/api/assets/{assetRef}/preview` | 预览素材 | 返回文件流 |
+| GET | `/api/assets/{assetRef}/download` | 下载素材 | 返回文件流 |
+| POST | `/api/assets/upload` | 上传单个素材 | Multipart: `file`, `folderId`, `relativePath`(可选) |
+| POST | `/api/assets/upload-directory` | 批量上传目录 | Multipart: `files`, `relativePaths`, `folderId` |
+| PUT | `/api/assets/{assetRef}` | 更新素材信息 | JSON: `{ "originalName": "...", "folderId": 1 }`，字段均可选 |
+| DELETE | `/api/assets/{assetRef}` | 删除素材 | - |
+| POST | `/api/assets/{assetRef}/re-extract` | 重新提取元数据 | - |
+| POST | `/api/assets/batch-download` | 生成批量下载地址 | JSON: `{ "assetRefs": ["public-id-1", "public-id-2"] }`，兼容旧字段 `assetIds` |
+
+说明：
+
+- `{assetRef}` 推荐传 `publicId`
+- 旧的数字 `id` 仍兼容，但不建议继续作为公开链接使用
+- `batch-download` 返回的是下载 URL 列表，不直接返回压缩包
 
 ### 文件夹接口 `/api/folders`
 
-| 方法 | 路径 | 说明 | 参数 |
+| 方法 | 路径 | 说明 | 参数 / 请求体 |
 |------|------|------|------|
-| GET | `/api/folders/tree` | 获取文件夹树 | - |
-| POST | `/api/folders` | 创建文件夹 | `name`, `parentId`(可选) |
-| PUT | `/api/folders/{id}` | 重命名文件夹 | `name` |
+| GET | `/api/folders` | 获取指定父目录下的直接子文件夹 | Query: `parentId`，默认 `0` |
+| GET | `/api/folders/tree` | 获取完整文件夹树 | - |
+| POST | `/api/folders` | 创建文件夹 | JSON: `{ "name": "...", "parentId": 0 }`，`parentId` 可省略 |
+| PUT | `/api/folders/{id}` | 更新文件夹 | JSON: `{ "name": "...", "parentId": 0 }`，`parentId` 可选 |
 | DELETE | `/api/folders/{id}` | 删除文件夹 | - |
 
 ### 用户接口 `/api/users`
 
-| 方法 | 路径 | 说明 | 参数 |
+以下接口均要求管理员权限。
+
+| 方法 | 路径 | 说明 | 参数 / 请求体 |
 |------|------|------|------|
-| GET | `/api/users` | 获取用户列表 | `pageNum`, `pageSize` |
-| POST | `/api/users` | 创建用户 | `username`, `password`, `role` |
-| PUT | `/api/users/{id}` | 更新用户 | `username`, `role` |
+| GET | `/api/users` | 获取用户列表 | - |
+| POST | `/api/users` | 创建用户 | JSON: `{ "username": "...", "displayName": "...", "password": "...", "role": "ADMIN|USER" }` |
+| PUT | `/api/users/{id}` | 更新用户 | JSON: `{ "displayName": "...", "role": "ADMIN|USER" }` |
+| PUT | `/api/users/{id}/password` | 重置密码 | JSON: `{ "password": "..." }` |
 | DELETE | `/api/users/{id}` | 删除用户 | - |
-| PUT | `/api/users/{id}/password` | 重置密码 | `newPassword` |
 
 ### 认证接口 `/api/auth`
 
-| 方法 | 路径 | 说明 | 参数 |
+| 方法 | 路径 | 说明 | 参数 / 请求体 |
 |------|------|------|------|
-| POST | `/api/auth/login` | 登录 | `username`, `password` |
-| POST | `/api/auth/logout` | 登出 | - |
-| GET | `/api/auth/me` | 获取当前用户信息 | - |
+| POST | `/api/auth/login` | 登录并建立 Session | JSON: `{ "username": "...", "password": "..." }` |
+| POST | `/api/auth/logout` | 登出并销毁 Session | - |
+| GET | `/api/auth/me` | 获取当前登录用户 | - |
 
-### 下载素材示例
+## 下载示例
+
+### 浏览器下载
+
+登录后直接在前端页面点击“下载”按钮。
+
+### curl 下载
+
+推荐使用 `publicId`：
 
 ```bash
-# 方式1: 浏览器直接下载（通过前端界面点击「下载」按钮）
+curl -L -o output.mp4 \
+  "http://localhost:8081/api/assets/<asset-public-id>/download" \
+  -H "Cookie: JSESSIONID=your_session_id"
+```
 
-# 方式2: 使用 curl 命令行下载
+历史数字 `id` 仍兼容：
+
+```bash
 curl -L -o output.mp4 \
   "http://localhost:8081/api/assets/1/download" \
   -H "Cookie: JSESSIONID=your_session_id"
-
-# 方式3: 使用 wget 下载
-wget -O output.mp4 \
-  "http://localhost:8081/api/assets/1/download" \
-  --header="Cookie: JSESSIONID=your_session_id"
 ```
 
-### 在内网集群中获取素材
+### Python 脚本下载
 
-如果你在内网集群中部署了系统，可以通过以下方式获取素材：
+```python
+import requests
 
-1. **通过前端界面下载**：登录后点击素材行的「下载」按钮
-2. **通过 curl 命令行**：
-   ```bash
-   # 先登录获取 cookie
-   curl -c cookies.txt -X POST http://<server-ip>:8081/api/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"username":"admin","password":"admin123"}'
-   
-   # 下载素材
-   curl -b cookies.txt -L -o myvideo.mp4 \
-     http://<server-ip>:8081/api/assets/1/download
-   ```
-3. **通过脚本批量下载**：
-   ```python
-   import requests
-   
-   # 登录
-   session = requests.Session()
-   session.post('http://<server-ip>:8081/api/auth/login',
-                json={'username': 'admin', 'password': 'admin123'})
-   
-   # 下载素材
-   resp = session.get('http://<server-ip>:8081/api/assets/1/download')
-   with open('downloaded_file.mp4', 'wb') as f:
-       f.write(resp.content)
-   ```
+session = requests.Session()
+session.post(
+    "http://<server-ip>:8081/api/auth/login",
+    json={"username": "admin", "password": "admin123"},
+)
+
+resp = session.get("http://<server-ip>:8081/api/assets/<asset-public-id>/download")
+with open("downloaded_file.mp4", "wb") as f:
+    f.write(resp.content)
+```
+
+## 说明
+
+- 根目录文档以当前后端实现为准。
+- 前端历史设计文档见 `frontend/README.md`，其中部分接口示例可能早于当前实现。

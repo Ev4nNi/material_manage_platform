@@ -29,40 +29,40 @@ export default {
     })
   },
 
-  deleteAsset(id) {
+  deleteAsset(assetRef) {
     return request({
-      url: `/assets/${id}`,
+      url: `/assets/${assetRef}`,
       method: 'delete'
     })
   },
 
-  updateAsset(id, data) {
+  updateAsset(assetRef, data) {
     return request({
-      url: `/assets/${id}`,
+      url: `/assets/${assetRef}`,
       method: 'put',
       data
     })
   },
 
-  getAssetDetail(id) {
+  getAssetDetail(assetRef) {
     return request({
-      url: `/assets/${id}`,
+      url: `/assets/${assetRef}`,
       method: 'get'
     })
   },
 
-  reExtractMetadata(id) {
+  reExtractMetadata(assetRef) {
     return request({
-      url: `/assets/${id}/re-extract`,
+      url: `/assets/${assetRef}/re-extract`,
       method: 'post'
     })
   },
 
-  batchDownload(assetIds) {
+  batchDownload(assetRefs) {
     return request({
       url: '/assets/batch-download',
       method: 'post',
-      data: { assetIds }
+      data: { assetRefs }
     })
   }
 }

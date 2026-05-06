@@ -16,11 +16,21 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -89,22 +99,22 @@ public class AssetController {
         }
     }
 
-    @DeleteMapping("/{id}")
-    public Result<Void> deleteAsset(@PathVariable Long id) {
+    @DeleteMapping("/{assetRef}")
+    public Result<Void> deleteAsset(@PathVariable String assetRef) {
         try {
-            assetService.deleteAsset(id);
+            assetService.deleteAsset(assetRef);
             return Result.success(null);
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
     }
 
-    @PutMapping("/{id}")
-    public Result<Asset> updateAsset(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+    @PutMapping("/{assetRef}")
+    public Result<Asset> updateAsset(@PathVariable String assetRef, @RequestBody Map<String, Object> params) {
         try {
             String originalName = params.get("originalName") == null ? null : params.get("originalName").toString();
             Long folderId = params.get("folderId") != null ? Long.valueOf(params.get("folderId").toString()) : null;
-            return Result.success(assetService.updateAsset(id, originalName, folderId));
+            return Result.success(assetService.updateAsset(assetRef, originalName, folderId));
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -112,17 +122,23 @@ public class AssetController {
 
     @GetMapping
     public Result<PageResult<Asset>> listAssets(@RequestParam(required = false) Long folderId,
-                                               @RequestParam(required = false) String startDate,
-                                               @RequestParam(required = false) String endDate,
-                                               @RequestParam(required = false) String fileType,
-                                               @RequestParam(required = false) String uploadedBy,
-                                               @RequestParam(required = false) String fileName,
-                                               @RequestParam(defaultValue = "1") int pageNum,
-                                               @RequestParam(defaultValue = "20") int pageSize) {
+                                                @RequestParam(required = false) String startDate,
+                                                @RequestParam(required = false) String endDate,
+                                                @RequestParam(required = false) String fileType,
+                                                @RequestParam(required = false) String uploadedBy,
+                                                @RequestParam(required = false) String fileName,
+                                                @RequestParam(defaultValue = "1") int pageNum,
+                                                @RequestParam(defaultValue = "20") int pageSize) {
         try {
-            if (pageNum < 1) pageNum = 1;
-            if (pageSize < 1) pageSize = DEFAULT_PAGE_SIZE;
-            if (pageSize > MAX_PAGE_SIZE) pageSize = MAX_PAGE_SIZE;
+            if (pageNum < 1) {
+                pageNum = 1;
+            }
+            if (pageSize < 1) {
+                pageSize = DEFAULT_PAGE_SIZE;
+            }
+            if (pageSize > MAX_PAGE_SIZE) {
+                pageSize = MAX_PAGE_SIZE;
+            }
 
             if (folderId != null) {
                 return Result.success(assetService.listByFolder(folderId, startDate, endDate, fileType, uploadedBy, fileName, pageNum, pageSize));
@@ -136,26 +152,69 @@ public class AssetController {
         }
     }
 
-    @GetMapping("/{id}/preview")
-    public ResponseEntity<Resource> previewAsset(@PathVariable Long id) {
-        return downloadAsset(id, "inline");
+    @GetMapping("/{assetRef}/preview")
+    public ResponseEntity<Resource> previewAsset(@PathVariable String assetRef) {
+        return streamAsset(assetRef, "inline");
     }
 
-    @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> downloadAsset(@PathVariable Long id) {
-        return downloadAsset(id, "attachment");
+    @GetMapping("/{assetRef}/download")
+    public ResponseEntity<Resource> downloadAsset(@PathVariable String assetRef) {
+        return streamAsset(assetRef, "attachment");
     }
 
-    private ResponseEntity<Resource> downloadAsset(Long id, String disposition) {
+    @GetMapping("/{assetRef}")
+    public Result<Asset> getAsset(@PathVariable String assetRef) {
+        Asset asset = assetService.getAssetByRef(assetRef);
+        if (asset == null) {
+            return Result.error("素材不存在");
+        }
+        return Result.success(asset);
+    }
+
+    @PostMapping("/{assetRef}/re-extract")
+    public Result<Asset> reExtractMetadata(@PathVariable String assetRef) {
         try {
-            Asset asset = assetService.getAssetById(id);
+            return Result.success(assetService.reExtractMetadata(assetRef));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/batch-download")
+    public Result<List<String>> batchDownload(@RequestBody Map<String, List<Object>> params) {
+        try {
+            List<Object> assetRefs = params.get("assetRefs");
+            if (assetRefs == null || assetRefs.isEmpty()) {
+                assetRefs = params.get("assetIds");
+            }
+            if (assetRefs == null || assetRefs.isEmpty()) {
+                return Result.error("素材ID列表不能为空");
+            }
+
+            List<String> downloadUrls = new ArrayList<>();
+            for (Object assetRef : assetRefs) {
+                Asset asset = assetService.getAssetByRef(String.valueOf(assetRef));
+                if (asset != null) {
+                    downloadUrls.add("/api/assets/" + getAssetRef(asset) + "/download");
+                }
+            }
+
+            return Result.success(downloadUrls);
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    private ResponseEntity<Resource> streamAsset(String assetRef, String disposition) {
+        try {
+            Asset asset = assetService.getAssetByRef(assetRef);
             if (asset == null) {
                 return ResponseEntity.notFound().build();
             }
 
             File file = storageService.getFile(asset.getStorageKey());
             if (!file.exists()) {
-                log.warn("{}文件不存在: ID={}, storageKey={}", disposition, id, asset.getStorageKey());
+                log.warn("{} file missing: ref={}, storageKey={}", disposition, assetRef, asset.getStorageKey());
                 return ResponseEntity.notFound().build();
             }
 
@@ -163,12 +222,12 @@ public class AssetController {
             String contentType = getContentType(asset);
 
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename*=UTF-8''" + java.net.URLEncoder.encode(asset.getOriginalName(), java.nio.charset.StandardCharsets.UTF_8))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename*=UTF-8''" + URLEncoder.encode(asset.getOriginalName(), StandardCharsets.UTF_8))
                     .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(file.length()))
                     .contentType(MediaType.parseMediaType(contentType))
                     .body(resource);
         } catch (Exception e) {
-            log.error("{}异常: ID={}, 错误={}", disposition, id, e.getMessage(), e);
+            log.error("{} failed: ref={}, error={}", disposition, assetRef, e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -193,43 +252,10 @@ public class AssetController {
         return fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
     }
 
-    @GetMapping("/{id}")
-    public Result<Asset> getAsset(@PathVariable Long id) {
-        Asset asset = assetService.getAssetById(id);
-        if (asset == null) {
-            return Result.error("素材不存在");
+    private String getAssetRef(Asset asset) {
+        if (asset.getPublicId() != null && !asset.getPublicId().isBlank()) {
+            return asset.getPublicId();
         }
-        return Result.success(asset);
-    }
-
-    @PostMapping("/{id}/re-extract")
-    public Result<Asset> reExtractMetadata(@PathVariable Long id) {
-        try {
-            return Result.success(assetService.reExtractMetadata(id));
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
-    }
-
-    @PostMapping("/batch-download")
-    public Result<List<String>> batchDownload(@RequestBody Map<String, List<Long>> params) {
-        try {
-            List<Long> assetIds = params.get("assetIds");
-            if (assetIds == null || assetIds.isEmpty()) {
-                return Result.error("素材ID列表不能为空");
-            }
-
-            List<String> downloadUrls = new ArrayList<>();
-            for (Long id : assetIds) {
-                Asset asset = assetService.getAssetById(id);
-                if (asset != null) {
-                    downloadUrls.add("/api/assets/" + id + "/download");
-                }
-            }
-
-            return Result.success(downloadUrls);
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        return String.valueOf(asset.getId());
     }
 }

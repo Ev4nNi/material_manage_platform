@@ -4,6 +4,7 @@
 
     <resultMap id="AssetResultMap" type="com.material.platform.entity.Asset">
         <id column="id" property="id"/>
+        <result column="public_id" property="publicId"/>
         <result column="folder_id" property="folderId"/>
         <result column="original_name" property="originalName"/>
         <result column="storage_key" property="storageKey"/>
@@ -11,12 +12,13 @@
         <result column="file_size" property="fileSize"/>
         <result column="upload_date" property="uploadDate"/>
         <result column="metadata" property="metadata"/>
+        <result column="uploaded_by" property="uploadedBy"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
     <select id="selectByDateRange" resultMap="AssetResultMap">
-        SELECT id, folder_id, original_name, storage_key, file_type, file_size,
-               upload_date, metadata, created_at
+        SELECT id, public_id, folder_id, original_name, storage_key, file_type, file_size,
+               upload_date, metadata, uploaded_by, created_at
         FROM assets
         WHERE upload_date &gt;= #{startDate}
           AND upload_date &lt;= #{endDate}

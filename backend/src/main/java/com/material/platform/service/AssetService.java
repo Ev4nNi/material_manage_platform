@@ -209,6 +209,71 @@ public class AssetService {
         return assetMapper.selectById(id);
     }
 
+    public Asset getAssetByRef(String assetRef) {
+        if (assetRef == null || assetRef.isBlank()) {
+            return null;
+        }
+
+        Long legacyId = parseLegacyId(assetRef);
+        if (legacyId != null) {
+            return assetMapper.selectById(legacyId);
+        }
+
+        return assetMapper.selectOne(new LambdaQueryWrapper<Asset>()
+                .eq(Asset::getPublicId, assetRef.trim()));
+    }
+
+    public void deleteAsset(String assetRef) {
+        Asset asset = requireAsset(assetRef);
+
+        try {
+            storageService.delete(asset.getStorageKey());
+            log.info("绱犳潗鍒犻櫎鎴愬姛: ID={}, 鏂囦欢={}", asset.getId(), asset.getOriginalName());
+        } catch (IOException e) {
+            log.error("鍒犻櫎绱犳潗鏂囦欢澶辫触: ID={}, 閿欒={}", asset.getId(), e.getMessage(), e);
+            throw new RuntimeException("鍒犻櫎鏂囦欢澶辫触: " + e.getMessage(), e);
+        }
+
+        assetMapper.deleteById(asset.getId());
+    }
+
+    public Asset updateAsset(String assetRef, String originalName, Long folderId) {
+        Asset asset = requireAsset(assetRef);
+
+        if (originalName != null && !originalName.isBlank()) {
+            asset.setOriginalName(originalName.trim());
+        }
+        if (folderId != null) {
+            folderService.requireFolder(folderId);
+            asset.setFolderId(folderId);
+        }
+
+        assetMapper.updateById(asset);
+        log.info("绱犳潗鏇存柊鎴愬姛: ID={}, 鏂版枃浠跺す={}", asset.getId(), folderId);
+        return asset;
+    }
+
+    public Asset reExtractMetadata(String assetRef) {
+        Asset asset = requireAsset(assetRef);
+        return reExtractMetadata(asset.getId());
+    }
+
+    private Asset requireAsset(String assetRef) {
+        Asset asset = getAssetByRef(assetRef);
+        if (asset == null) {
+            throw new RuntimeException("绱犳潗涓嶅瓨鍦紝ID: " + assetRef);
+        }
+        return asset;
+    }
+
+    private Long parseLegacyId(String assetRef) {
+        try {
+            return Long.valueOf(assetRef.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private Asset saveAsset(MultipartFile file, Long folderId, String displayFileName, String uploadedBy) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("上传文件不能为空");
@@ -237,6 +302,7 @@ public class AssetService {
         storageService.upload(file, storageKey);
 
         Asset asset = new Asset();
+        asset.setPublicId(UUID.randomUUID().toString());
         asset.setFolderId(folderId);
         asset.setOriginalName(displayFileName);
         asset.setStorageKey(storageKey);

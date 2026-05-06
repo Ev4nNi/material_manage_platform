@@ -76,6 +76,7 @@ class AssetServiceTest {
         assertEquals("test.jpg", asset.getOriginalName());
         assertEquals(1L, asset.getFolderId());
         assertNotNull(asset.getStorageKey());
+        assertNotNull(asset.getPublicId());
         assertNotNull(asset.getUploadDate());
         verify(storageService).upload(any(), anyString());
         verify(assetMapper).insert(any(Asset.class));
@@ -188,9 +189,32 @@ class AssetServiceTest {
         assertEquals(1, result.size());
     }
 
+    @Test
+    void testGetAssetByRefWithLegacyId() {
+        Asset asset = createAsset(1L, "file1.jpg", 1L);
+        when(assetMapper.selectById(1L)).thenReturn(asset);
+
+        Asset result = assetService.getAssetByRef("1");
+
+        assertSame(asset, result);
+    }
+
+    @Test
+    void testGetAssetByRefWithPublicId() {
+        Asset asset = createAsset(1L, "file1.jpg", 1L);
+        asset.setPublicId("asset-public-id");
+        when(assetMapper.selectOne(any())).thenReturn(asset);
+
+        Asset result = assetService.getAssetByRef("asset-public-id");
+
+        assertSame(asset, result);
+        verify(assetMapper, never()).selectById(anyLong());
+    }
+
     private Asset createAsset(Long id, String name, Long folderId) {
         Asset asset = new Asset();
         asset.setId(id);
+        asset.setPublicId("public-" + id);
         asset.setOriginalName(name);
         asset.setFolderId(folderId);
         return asset;

@@ -20,6 +20,9 @@ public class Asset {
     @TableField("id")
     private Long id;
 
+    @TableField("public_id")
+    private String publicId;
+
     @TableField("folder_id")
     private Long folderId;
 
