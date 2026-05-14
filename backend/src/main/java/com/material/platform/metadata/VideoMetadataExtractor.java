@@ -1,9 +1,13 @@
 package com.material.platform.metadata;
 
 import org.jcodec.api.FrameGrab;
+import org.jcodec.api.JCodecException;
 import org.jcodec.common.io.NIOUtils;
 import org.jcodec.common.io.SeekableByteChannel;
+import org.jcodec.common.model.Packet;
 import org.jcodec.common.model.Picture;
+import org.jcodec.demux.Demuxer;
+import org.jcodec.demux.DemuxerTrack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -82,7 +86,51 @@ public class VideoMetadataExtractor implements MetadataExtractor {
             NIOUtils.closeQuietly(ch);
         }
 
+        try {
+            double duration = extractDuration(file);
+            if (duration > 0) {
+                metadata.put("duration", duration);
+                log.info("视频时长提取成功: {}, 时长: {} 秒", file.getName(), duration);
+            }
+        } catch (Exception e) {
+            log.warn("提取视频时长失败: {}, 错误: {}", file.getName(), e.getMessage());
+        }
+
         return metadata;
+    }
+
+    private double extractDuration(File file) throws IOException, JCodecException {
+        SeekableByteChannel ch = null;
+        try {
+            ch = NIOUtils.readableChannel(file);
+            Demuxer demuxer = new Demuxer(ch);
+            
+            DemuxerTrack videoTrack = null;
+            for (DemuxerTrack track : demuxer.getTracks()) {
+                if (track.getMeta().getCodec() != null) {
+                    videoTrack = track;
+                    break;
+                }
+            }
+            
+            if (videoTrack == null) {
+                return 0;
+            }
+            
+            double totalDuration = 0;
+            Packet packet;
+            while ((packet = videoTrack.nextFrame()) != null) {
+                totalDuration += packet.getDuration();
+            }
+            
+            double fps = videoTrack.getMeta().getTotalDuration() > 0 
+                ? (double) videoTrack.getMeta().getTotalFrames() / videoTrack.getMeta().getTotalDuration() 
+                : 25.0;
+            
+            return totalDuration / fps;
+        } finally {
+            NIOUtils.closeQuietly(ch);
+        }
     }
 
     private String getFileExtension(String fileName) {

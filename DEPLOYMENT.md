@@ -5,32 +5,76 @@
 - Docker 20.10+
 - Docker Compose 2.0+
 
-## 目录结构
+---
+
+## 服务器目录结构
 
 服务器数据目录：`/data2/material_manage_platform/`
 
 ```
 /data2/material_manage_platform/
-├── storage/    # 素材文件存储
-├── db/         # SQLite 数据库
-└── logs/       # 应用日志
+├── deploy-package/      # 部署包（解压后）
+├── storage/             # 素材文件存储
+├── db/                  # SQLite 数据库
+└── logs/                # 应用日志
 ```
 
 ---
 
-## 部署步骤
+## 打包步骤（在开发机器上执行）
+
+### 1. 创建打包目录
+
+在项目根目录下创建 `deploy-package` 文件夹：
+
+```bash
+mkdir deploy-package
+```
+
+### 2. 复制以下文件到 deploy-package 目录
+
+```
+deploy-package/
+├── backend/             # 后端服务（含 Dockerfile）
+├── frontend/            # 前端服务（含 Dockerfile）
+├── docker-compose.yml   # Docker Compose 配置
+└── DEPLOYMENT.md        # 部署说明文档（可选）
+```
+
+### 3. 执行打包
+
+在项目根目录执行：
+
+```bash
+tar -czvf material_manage_platform.tar.gz -C deploy-package .
+```
+
+---
+
+## 部署步骤（在服务器上执行）
 
 ### 1. 上传并解压
 
 ```bash
-# 上传 material_manage_platform.tar.gz 到服务器
+# 上传 material_manage_platform.tar.gz 到服务器 /data2/material_manage_platform/
 
 # 解压
+cd /data2/material_manage_platform
 tar -xzvf material_manage_platform.tar.gz
-cd deploy-package
 ```
 
-### 2. 确保数据目录存在
+解压后目录结构：
+
+```
+/data2/material_manage_platform/
+└── deploy-package/
+    ├── backend/
+    ├── frontend/
+    ├── docker-compose.yml
+    └── DEPLOYMENT.md
+```
+
+### 2. 创建数据目录
 
 ```bash
 mkdir -p /data2/material_manage_platform/{storage,db,logs}
@@ -38,7 +82,10 @@ mkdir -p /data2/material_manage_platform/{storage,db,logs}
 
 ### 3. 配置（如需要修改端口）
 
-编辑 `docker-compose.yml`：
+```bash
+cd /data2/material_manage_platform/deploy-package
+vim docker-compose.yml
+```
 
 ```yaml
 services:
@@ -53,17 +100,10 @@ services:
 ### 4. 构建并启动
 
 ```bash
+cd /data2/material_manage_platform/deploy-package
+
 # 前后端一起构建并启动
 docker-compose up -d --build
-
-# 仅构建并启动后端
-docker build -t material-backend:latest ./backend
-docker run -d --name material-backend -p 8081:8080 \
-  -e APP_PORT=8080 \
-  -v /data2/material_manage_platform/storage:/data/storage \
-  -v /data2/material_manage_platform/db:/data/db \
-  -v /data2/material_manage_platform/logs:/data/logs \
-  material-backend:latest
 ```
 
 ### 5. 验证部署
@@ -76,7 +116,7 @@ docker ps
 curl http://localhost:8081/api/auth/me
 # 预期返回: {"code":401,"message":"请先登录","data":null}
 
-# 测试前端（如果部署了）
+# 测试前端
 curl http://localhost:3001
 ```
 
@@ -184,3 +224,42 @@ netstat -tlnp | grep 3001
 | DB_PATH | /data/db/material.db | 数据库路径 |
 | LOG_PATH | /data/logs/application.log | 日志路径 |
 | MAX_FILE_SIZE | 500MB | 最大上传文件大小 |
+
+---
+
+## 卸载
+
+### 停止并删除容器
+
+```bash
+cd /data2/material_manage_platform/deploy-package
+
+# 停止服务
+docker-compose down
+
+# 删除容器（如需要）
+docker rm -f material-backend material-frontend
+```
+
+### 删除部署文件
+
+```bash
+# 删除部署目录
+rm -rf /data2/material_manage_platform/deploy-package
+
+# 删除 Docker 镜像（如需要）
+docker rmi material-backend:latest
+docker rmi material-frontend:latest
+```
+
+### 数据清理（可选）
+
+如需完全清理所有数据：
+
+```bash
+# 删除数据目录（请提前备份重要数据）
+rm -rf /data2/material_manage_platform/{storage,db,logs}
+
+# 删除 Docker 卷（如使用了 volume）
+docker volume rm material_manage_platform_storage material_manage_platform_db
+```
