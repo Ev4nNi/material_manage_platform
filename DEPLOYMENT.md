@@ -1,265 +1,166 @@
-# 素材管理平台 - Docker 部署指南
+# 素材管理平台 Docker 部署指南
 
 ## 环境要求
 
 - Docker 20.10+
 - Docker Compose 2.0+
 
----
+## docker-compose 说明
 
-## 服务器目录结构
+当前 `docker-compose.yml` 使用两个本地构建上下文：
 
-服务器数据目录：`/data2/material_manage_platform/`
+- `backend`：执行 `build: ./backend`，后端 Dockerfile 只会读取 `target/*.jar`。
+- `frontend`：执行 `build: ./frontend`，前端 Dockerfile 会在容器内执行 `npm install` 和 `npm run build`。
 
-```
+服务端数据目录固定为 `/data2/material_manage_platform/`：
+
+```text
 /data2/material_manage_platform/
-├── deploy-package/      # 部署包（解压后）
-├── storage/             # 素材文件存储
+├── deploy-package/      # 部署包解压目录
+├── storage/             # 素材文件
 ├── db/                  # SQLite 数据库
 └── logs/                # 应用日志
 ```
 
----
-
-## 打包步骤（在开发机器上执行）
-
-### 1. 创建打包目录
-
-在项目根目录下创建 `deploy-package` 文件夹：
-
-```bash
-mkdir deploy-package
-```
-
-### 2. 复制以下文件到 deploy-package 目录
-
-```
-deploy-package/
-├── backend/             # 后端服务（含 Dockerfile）
-├── frontend/            # 前端服务（含 Dockerfile）
-├── docker-compose.yml   # Docker Compose 配置
-└── DEPLOYMENT.md        # 部署说明文档（可选）
-```
-
-### 3. 执行打包
-
-在项目根目录执行：
-
-```bash
-tar -czvf material_manage_platform.tar.gz -C deploy-package .
-```
-
----
-
-## 部署步骤（在服务器上执行）
-
-### 1. 上传并解压
-
-```bash
-# 上传 material_manage_platform.tar.gz 到服务器 /data2/material_manage_platform/
-
-# 解压
-cd /data2/material_manage_platform
-tar -xzvf material_manage_platform.tar.gz
-```
-
-解压后目录结构：
-
-```
-/data2/material_manage_platform/
-└── deploy-package/
-    ├── backend/
-    ├── frontend/
-    ├── docker-compose.yml
-    └── DEPLOYMENT.md
-```
-
-### 2. 创建数据目录
-
-```bash
-mkdir -p /data2/material_manage_platform/{storage,db,logs}
-```
-
-### 3. 配置（如需要修改端口）
-
-```bash
-cd /data2/material_manage_platform/deploy-package
-vim docker-compose.yml
-```
+端口映射：
 
 ```yaml
 services:
   backend:
     ports:
-      - "8081:8080"    # 主机端口:容器端口
+      - "8081:8080"
   frontend:
     ports:
-      - "3001:80"      # 主机端口:容器端口
+      - "3001:80"
 ```
 
-### 4. 构建并启动
+## 最小部署包内容
+
+部署包只需要包含 Docker 构建和运行必需文件：
+
+```text
+deploy-package/
+├── backend/
+│   ├── Dockerfile
+│   └── target/
+│       └── material-manage-platform-1.0.0.jar
+├── frontend/
+│   ├── Dockerfile
+│   ├── index.html
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── vite.config.js
+│   └── src/
+└── docker-compose.yml
+```
+
+不需要打包的内容：
+
+- `backend/src/`、`backend/pom.xml`、`backend/src/test/`：后端镜像直接使用已构建 jar。
+- `frontend/dist/`、`frontend/node_modules/`：前端镜像会在 Docker build 中生成。
+- `.git/`、IDE 配置、README、开发脚本、历史压缩包、测试报告等。
+
+## 打包步骤（Windows PowerShell）
+
+在项目根目录 `D:\programProject\workproject\material_manage_platform` 执行：
+
+```powershell
+# 1. 构建后端 jar
+mvn -f .\backend\pom.xml -DskipTests package
+
+# 2. 可选：验证前端可构建
+npm --prefix .\frontend run build
+
+# 3. 重建最小部署目录
+$packageRoot = Resolve-Path .\deploy-package -ErrorAction SilentlyContinue
+if ($packageRoot) {
+    Remove-Item -LiteralPath $packageRoot.Path -Recurse -Force
+}
+
+New-Item -ItemType Directory -Force -Path .\deploy-package\backend\target | Out-Null
+New-Item -ItemType Directory -Force -Path .\deploy-package\frontend\src | Out-Null
+
+Copy-Item -Path .\docker-compose.yml -Destination .\deploy-package\docker-compose.yml -Force
+
+Copy-Item -Path .\backend\Dockerfile -Destination .\deploy-package\backend\Dockerfile -Force
+Copy-Item -Path .\backend\target\material-manage-platform-1.0.0.jar -Destination .\deploy-package\backend\target\material-manage-platform-1.0.0.jar -Force
+
+$frontendFiles = @(
+    '.\frontend\Dockerfile',
+    '.\frontend\index.html',
+    '.\frontend\nginx.conf',
+    '.\frontend\package.json',
+    '.\frontend\package-lock.json',
+    '.\frontend\vite.config.js'
+)
+Copy-Item -Path $frontendFiles -Destination .\deploy-package\frontend -Force
+Copy-Item -Path .\frontend\src\* -Destination .\deploy-package\frontend\src -Recurse -Force
+
+# 4. 生成压缩包
+tar -czvf .\material_manage_platform.tar.gz -C .\deploy-package .
+```
+
+注意：`deploy-package\backend\target` 中只保留正式 jar，不要放入 `*.jar.original`，否则 `backend/Dockerfile` 的 `COPY target/*.jar app.jar` 可能匹配到多个文件。
+
+## 部署步骤（服务器）
+
+上传 `material_manage_platform.tar.gz` 到 `/data2/material_manage_platform/`，然后执行：
 
 ```bash
-cd /data2/material_manage_platform/deploy-package
-
-# 前后端一起构建并启动
+cd /data2/material_manage_platform
+mkdir -p storage db logs deploy-package
+tar -xzvf material_manage_platform.tar.gz -C deploy-package
+cd deploy-package
 docker-compose up -d --build
 ```
 
-### 5. 验证部署
+验证：
 
 ```bash
-# 查看容器状态
-docker ps
-
-# 测试后端 API
+docker-compose ps
 curl http://localhost:8081/api/auth/me
-# 预期返回: {"code":401,"message":"请先登录","data":null}
-
-# 测试前端
 curl http://localhost:3001
 ```
 
----
-
-## 服务地址
-
-| 服务 | 地址 |
-|------|------|
-| 后端 API | http://localhost:8081 |
-| 前端界面 | http://localhost:3001 |
-
----
+预期后端未登录接口返回 `401` 是正常行为。
 
 ## 常用运维命令
 
 ```bash
-# 查看所有服务状态
+cd /data2/material_manage_platform/deploy-package
+
 docker-compose ps
-
-# 查看日志
 docker-compose logs -f
-docker logs -f material-backend
-
-# 重启服务
 docker-compose restart
-
-# 停止服务
 docker-compose down
-
-# 重新构建并启动
 docker-compose up -d --build
 ```
 
----
-
-## 数据管理
-
-### 备份
+## 数据备份
 
 ```bash
-# 备份数据库
 cp /data2/material_manage_platform/db/material.db /data2/material_manage_platform/db/material.db.$(date +%Y%m%d)
-
-# 备份存储
 tar -czf /data2/material_manage_platform/storage.tar.gz.$(date +%Y%m%d) /data2/material_manage_platform/storage/
 ```
 
-### 恢复
-
-```bash
-# 停止服务
-docker-compose down
-
-# 恢复数据库
-cp /data2/material_manage_platform/db/material.db.backup /data2/material_manage_platform/db/material.db
-
-# 重新启动
-docker-compose up -d
-```
-
----
-
 ## 故障排查
 
-### 容器显示 unhealthy
-
-健康检查把 401 响应当作错误。如遇此情况，修改 `docker-compose.yml`：
-
-```yaml
-healthcheck:
-  test: "wget -q -O - http://localhost:8080/api/auth/me || true"
-```
-
-### 后端无法启动
+查看后端日志：
 
 ```bash
-# 查看日志
 docker logs material-backend
+```
 
-# 检查数据目录权限
+查看前端日志：
+
+```bash
+docker logs material-frontend
+```
+
+检查数据目录：
+
+```bash
 ls -la /data2/material_manage_platform/
 ```
 
-### 前端无法访问
-
-```bash
-# 查看前端日志
-docker logs material-frontend
-
-# 检查端口占用
-netstat -tlnp | grep 3001
-```
-
----
-
-## 环境变量说明
-
-### 后端
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| APP_PORT | 8080 | 容器内端口 |
-| STORAGE_PATH | /data/storage | 素材存储路径 |
-| DB_PATH | /data/db/material.db | 数据库路径 |
-| LOG_PATH | /data/logs/application.log | 日志路径 |
-| MAX_FILE_SIZE | 500MB | 最大上传文件大小 |
-
----
-
-## 卸载
-
-### 停止并删除容器
-
-```bash
-cd /data2/material_manage_platform/deploy-package
-
-# 停止服务
-docker-compose down
-
-# 删除容器（如需要）
-docker rm -f material-backend material-frontend
-```
-
-### 删除部署文件
-
-```bash
-# 删除部署目录
-rm -rf /data2/material_manage_platform/deploy-package
-
-# 删除 Docker 镜像（如需要）
-docker rmi material-backend:latest
-docker rmi material-frontend:latest
-```
-
-### 数据清理（可选）
-
-如需完全清理所有数据：
-
-```bash
-# 删除数据目录（请提前备份重要数据）
-rm -rf /data2/material_manage_platform/{storage,db,logs}
-
-# 删除 Docker 卷（如使用了 volume）
-docker volume rm material_manage_platform_storage material_manage_platform_db
-```

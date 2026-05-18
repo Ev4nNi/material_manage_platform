@@ -25,4 +25,69 @@
         ORDER BY upload_date DESC
     </select>
 
+    <select id="selectByRefs" resultMap="AssetResultMap">
+        SELECT DISTINCT id, public_id, folder_id, original_name, storage_key, file_type, file_size,
+               upload_date, metadata, uploaded_by, created_at
+        FROM assets
+        <where>
+            <trim prefix="(" suffix=")" prefixOverrides="OR">
+                <if test="assetRefs != null and assetRefs.size() > 0">
+                    OR public_id IN
+                    <foreach collection="assetRefs" item="assetRef" open="(" separator="," close=")">
+                        #{assetRef}
+                    </foreach>
+                </if>
+                <if test="legacyIds != null and legacyIds.size() > 0">
+                    OR id IN
+                    <foreach collection="legacyIds" item="legacyId" open="(" separator="," close=")">
+                        #{legacyId}
+                    </foreach>
+                </if>
+            </trim>
+        </where>
+        ORDER BY created_at DESC, id DESC
+    </select>
+
+    <select id="selectByFolderIds" resultMap="AssetResultMap">
+        SELECT id, public_id, folder_id, original_name, storage_key, file_type, file_size,
+               upload_date, metadata, uploaded_by, created_at
+        FROM assets
+        WHERE folder_id IN
+        <foreach collection="folderIds" item="folderId" open="(" separator="," close=")">
+            #{folderId}
+        </foreach>
+    </select>
+
+    <select id="selectReferencedStorageKeys" resultType="string">
+        SELECT DISTINCT storage_key
+        FROM assets
+        WHERE storage_key IN
+        <foreach collection="storageKeys" item="storageKey" open="(" separator="," close=")">
+            #{storageKey}
+        </foreach>
+        <if test="excludedIds != null and excludedIds.size() > 0">
+            AND id NOT IN
+            <foreach collection="excludedIds" item="assetId" open="(" separator="," close=")">
+                #{assetId}
+            </foreach>
+        </if>
+    </select>
+
+    <update id="batchUpdateFolder">
+        UPDATE assets
+        SET folder_id = #{folderId}
+        WHERE id IN
+        <foreach collection="assetIds" item="assetId" open="(" separator="," close=")">
+            #{assetId}
+        </foreach>
+    </update>
+
+    <delete id="batchDeleteByIds">
+        DELETE FROM assets
+        WHERE id IN
+        <foreach collection="assetIds" item="assetId" open="(" separator="," close=")">
+            #{assetId}
+        </foreach>
+    </delete>
+
 </mapper>

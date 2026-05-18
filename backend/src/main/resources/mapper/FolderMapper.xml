@@ -9,4 +9,23 @@
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
+    <select id="selectDescendantIds" resultType="long">
+        WITH RECURSIVE folder_tree(id) AS (
+            SELECT id FROM folders WHERE id = #{folderId}
+            UNION ALL
+            SELECT f.id
+            FROM folders f
+            INNER JOIN folder_tree ft ON f.parent_id = ft.id
+        )
+        SELECT id FROM folder_tree
+    </select>
+
+    <delete id="deleteByIds">
+        DELETE FROM folders
+        WHERE id IN
+        <foreach collection="folderIds" item="folderId" open="(" separator="," close=")">
+            #{folderId}
+        </foreach>
+    </delete>
+
 </mapper>

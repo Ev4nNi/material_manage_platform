@@ -44,6 +44,22 @@ export default {
     })
   },
 
+  batchMove(assetRefs, folderId) {
+    return request({
+      url: '/assets/batch-move',
+      method: 'put',
+      data: { assetRefs, folderId }
+    })
+  },
+
+  batchDelete(assetRefs) {
+    return request({
+      url: '/assets/batch',
+      method: 'delete',
+      data: { assetRefs }
+    })
+  },
+
   getAssetDetail(assetRef) {
     return request({
       url: `/assets/${assetRef}`,

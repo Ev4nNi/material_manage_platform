@@ -2,12 +2,11 @@ package com.material.platform.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.material.platform.dto.FolderTreeNode;
-import com.material.platform.entity.Asset;
 import com.material.platform.entity.Folder;
-import com.material.platform.mapper.AssetMapper;
 import com.material.platform.mapper.FolderMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -21,7 +20,7 @@ import java.util.Map;
 public class FolderService {
 
     private final FolderMapper folderMapper;
-    private final AssetMapper assetMapper;
+    private final AssetBatchOperationService assetBatchOperationService;
 
     public Folder createFolder(String name, Long parentId) {
         Folder folder = new Folder();
@@ -32,22 +31,16 @@ public class FolderService {
         return folder;
     }
 
+    @Transactional
     public void deleteFolder(Long id) {
-        Long childCount = folderMapper.selectCount(
-                new LambdaQueryWrapper<Folder>().eq(Folder::getParentId, id)
-        );
-        if (childCount > 0) {
-            throw new RuntimeException("文件夹不为空，无法删除");
+        requireFolder(id);
+        List<Long> folderIds = folderMapper.selectDescendantIds(id);
+        if (folderIds == null || folderIds.isEmpty()) {
+            throw new RuntimeException("文件夹不存在");
         }
 
-        Long assetCount = assetMapper.selectCount(
-                new LambdaQueryWrapper<Asset>().eq(Asset::getFolderId, id)
-        );
-        if (assetCount > 0) {
-            throw new RuntimeException("文件夹不为空，无法删除");
-        }
-
-        folderMapper.deleteById(id);
+        assetBatchOperationService.deleteAssetsByFolderIds(folderIds);
+        folderMapper.deleteByIds(folderIds);
     }
 
     public Folder updateFolder(Long id, String name, Long parentId) {

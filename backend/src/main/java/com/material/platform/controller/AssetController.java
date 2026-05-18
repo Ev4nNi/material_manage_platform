@@ -42,7 +42,7 @@ public class AssetController {
 
     private static final Logger log = LoggerFactory.getLogger(AssetController.class);
     private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
+    private static final int MAX_PAGE_SIZE = 500;
 
     private static final Map<String, String> IMAGE_MIME_TYPES = Map.of(
             "jpg", "image/jpeg",
@@ -99,11 +99,30 @@ public class AssetController {
         }
     }
 
+    @DeleteMapping("/batch")
+    public Result<Integer> batchDeleteAssets(@RequestBody Map<String, Object> params) {
+        try {
+            return Result.success(assetService.batchDeleteAssets(extractAssetRefs(params)));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{assetRef}")
     public Result<Void> deleteAsset(@PathVariable String assetRef) {
         try {
             assetService.deleteAsset(assetRef);
             return Result.success(null);
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @PutMapping("/batch-move")
+    public Result<Integer> batchMoveAssets(@RequestBody Map<String, Object> params) {
+        try {
+            Long folderId = extractRequiredLong(params.get("folderId"), "目标文件夹不能为空");
+            return Result.success(assetService.batchMoveAssets(extractAssetRefs(params), folderId));
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -203,6 +222,34 @@ public class AssetController {
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
+    }
+
+    private List<String> extractAssetRefs(Map<String, Object> params) {
+        Object rawAssetRefs = params.get("assetRefs");
+        if (rawAssetRefs == null) {
+            rawAssetRefs = params.get("assetIds");
+        }
+        if (!(rawAssetRefs instanceof List<?> rawList) || rawList.isEmpty()) {
+            throw new RuntimeException("素材ID列表不能为空");
+        }
+
+        List<String> assetRefs = rawList.stream()
+                .map(String::valueOf)
+                .map(String::trim)
+                .filter(assetRef -> !assetRef.isBlank())
+                .distinct()
+                .toList();
+        if (assetRefs.isEmpty()) {
+            throw new RuntimeException("素材ID列表不能为空");
+        }
+        return assetRefs;
+    }
+
+    private Long extractRequiredLong(Object value, String errorMessage) {
+        if (value == null || value.toString().isBlank()) {
+            throw new RuntimeException(errorMessage);
+        }
+        return Long.valueOf(value.toString());
     }
 
     private ResponseEntity<Resource> streamAsset(String assetRef, String disposition) {

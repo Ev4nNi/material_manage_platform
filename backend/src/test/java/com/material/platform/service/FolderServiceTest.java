@@ -1,7 +1,6 @@
 package com.material.platform.service;
 
 import com.material.platform.entity.Folder;
-import com.material.platform.mapper.AssetMapper;
 import com.material.platform.mapper.FolderMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,13 +26,13 @@ class FolderServiceTest {
     private FolderMapper folderMapper;
 
     @Mock
-    private AssetMapper assetMapper;
+    private AssetBatchOperationService assetBatchOperationService;
 
     private FolderService folderService;
 
     @BeforeEach
     void setUp() {
-        folderService = new FolderService(folderMapper, assetMapper);
+        folderService = new FolderService(folderMapper, assetBatchOperationService);
     }
 
     @Test
@@ -74,12 +73,13 @@ class FolderServiceTest {
         folder.setCreatedAt(LocalDateTime.now());
 
         when(folderMapper.selectById(1L)).thenReturn(folder);
-        when(folderMapper.selectCount(any())).thenReturn(0L);
-        when(assetMapper.selectCount(any())).thenReturn(0L);
-        when(folderMapper.deleteById(1L)).thenReturn(1);
+        when(folderMapper.selectDescendantIds(1L)).thenReturn(List.of(1L));
+        when(assetBatchOperationService.deleteAssetsByFolderIds(List.of(1L))).thenReturn(0);
+        when(folderMapper.deleteByIds(List.of(1L))).thenReturn(1);
 
         folderService.deleteFolder(1L);
-        verify(folderMapper).deleteById(1L);
+        verify(assetBatchOperationService).deleteAssetsByFolderIds(List.of(1L));
+        verify(folderMapper).deleteByIds(List.of(1L));
     }
 
     @Test
@@ -90,11 +90,13 @@ class FolderServiceTest {
         folder.setParentId(0L);
 
         when(folderMapper.selectById(1L)).thenReturn(folder);
-        when(folderMapper.selectCount(any())).thenReturn(1L);
+        when(folderMapper.selectDescendantIds(1L)).thenReturn(List.of(1L, 2L));
+        when(assetBatchOperationService.deleteAssetsByFolderIds(List.of(1L, 2L))).thenReturn(0);
+        when(folderMapper.deleteByIds(List.of(1L, 2L))).thenReturn(2);
 
-        assertThrows(RuntimeException.class, () -> {
-            folderService.deleteFolder(1L);
-        });
+        folderService.deleteFolder(1L);
+
+        verify(folderMapper).deleteByIds(List.of(1L, 2L));
     }
 
     @Test
@@ -105,12 +107,13 @@ class FolderServiceTest {
         folder.setParentId(0L);
 
         when(folderMapper.selectById(1L)).thenReturn(folder);
-        when(folderMapper.selectCount(any())).thenReturn(0L);
-        when(assetMapper.selectCount(any())).thenReturn(5L);
+        when(folderMapper.selectDescendantIds(1L)).thenReturn(List.of(1L));
+        when(assetBatchOperationService.deleteAssetsByFolderIds(List.of(1L))).thenReturn(5);
+        when(folderMapper.deleteByIds(List.of(1L))).thenReturn(1);
 
-        assertThrows(RuntimeException.class, () -> {
-            folderService.deleteFolder(1L);
-        });
+        folderService.deleteFolder(1L);
+
+        verify(assetBatchOperationService).deleteAssetsByFolderIds(List.of(1L));
     }
 
     @Test

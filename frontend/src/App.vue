@@ -217,6 +217,34 @@
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="52" />
+              <el-table-column label="预览" width="120">
+                <template #default="{ row }">
+                  <div
+                    class="asset-preview-thumb"
+                    role="button"
+                    tabindex="0"
+                    @click="handlePreview(row)"
+                    @keyup.enter="handlePreview(row)"
+                  >
+                    <img
+                      v-if="isImage(row.fileType)"
+                      :src="previewUrl(row)"
+                      :alt="row.originalName"
+                      class="asset-preview-media"
+                      loading="lazy"
+                    />
+                    <video
+                      v-else-if="isVideo(row.fileType)"
+                      :src="previewUrl(row)"
+                      class="asset-preview-media"
+                      muted
+                      playsinline
+                      preload="metadata"
+                    />
+                    <span v-else class="asset-preview-placeholder">{{ fileTypeLabel(row.fileType) }}</span>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column prop="originalName" label="文件名" min-width="220">
                 <template #default="{ row }">
                   <el-tooltip :content="row.originalName" placement="top">
@@ -247,7 +275,6 @@
               </el-table-column>
               <el-table-column label="操作" width="220" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="handlePreview(row)">预览</el-button>
                   <el-button link type="primary" @click="handleDownload(row)">下载</el-button>
                   <el-button link type="primary" @click="handleMove(row)">移动</el-button>
                   <el-popconfirm title="确定删除该素材吗？" @confirm="handleDelete(row)">
@@ -262,7 +289,7 @@
               <el-pagination
                 v-model:current-page="pagination.pageNum"
                 v-model:page-size="pagination.pageSize"
-                :page-sizes="[10, 20, 50, 100]"
+                :page-sizes="[10, 20, 50, 100, 200, 500]"
                 :total="pagination.total"
                 layout="total, sizes, prev, pager, next, jumper"
                 @size-change="handlePageSizeChange"
@@ -797,7 +824,7 @@ async function handleDeleteFolder() {
   }
 
   try {
-    await ElMessageBox.confirm('删除前请确保该文件夹下没有子文件夹和素材。', '删除文件夹', {
+    await ElMessageBox.confirm('确定删除该文件夹及其所有子文件夹和素材吗？删除后不可恢复。', '删除文件夹', {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
       type: 'warning'
@@ -941,9 +968,7 @@ async function submitMove() {
   }
 
   try {
-    await Promise.all(
-      assetsToMove.map(asset => assetApi.updateAsset(assetRef(asset), { folderId: moveTargetFolderId.value }))
-    )
+    await assetApi.batchMove(assetsToMove.map(asset => assetRef(asset)), moveTargetFolderId.value)
     moveDialogVisible.value = false
     clearSelection()
     await loadAssets()
@@ -965,7 +990,7 @@ async function batchDelete() {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    await Promise.all(selectedAssets.value.map(asset => assetApi.deleteAsset(assetRef(asset))))
+    await assetApi.batchDelete(selectedAssets.value.map(asset => assetRef(asset)))
     clearSelection()
     await loadAssets()
     ElMessage.success('批量删除成功')
@@ -1336,6 +1361,10 @@ function isImage(type) {
   return type === 'image'
 }
 
+function isVideo(type) {
+  return type === 'video'
+}
+
 function assetRef(asset) {
   return asset?.publicId || asset?.id
 }
@@ -1673,6 +1702,37 @@ function getUploaderDisplayName(username) {
 .folder-node.disabled {
   color: #a8a29e;
   cursor: not-allowed;
+}
+
+.asset-preview-thumb {
+  width: 88px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #fafaf9;
+  cursor: pointer;
+}
+
+.asset-preview-thumb:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.asset-preview-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.asset-preview-placeholder {
+  color: #78716c;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .ellipsis-text,

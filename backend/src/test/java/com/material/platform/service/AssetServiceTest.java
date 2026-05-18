@@ -41,11 +41,14 @@ class AssetServiceTest {
     @Mock
     private FolderService folderService;
 
+    @Mock
+    private AssetBatchOperationService assetBatchOperationService;
+
     private AssetService assetService;
 
     @BeforeEach
     void setUp() {
-        assetService = new AssetService(assetMapper, storageService, metadataExtractorFactory, folderService);
+        assetService = new AssetService(assetMapper, storageService, metadataExtractorFactory, folderService, assetBatchOperationService);
     }
 
     @Test
@@ -117,12 +120,10 @@ class AssetServiceTest {
         asset.setStorageKey("2026/04/24/test.jpg");
 
         when(assetMapper.selectById(1L)).thenReturn(asset);
-        doNothing().when(storageService).delete(anyString());
-        when(assetMapper.deleteById(1L)).thenReturn(1);
+        when(assetBatchOperationService.batchDeleteByRefs(any())).thenReturn(1);
 
         assetService.deleteAsset(1L);
-        verify(storageService).delete("2026/04/24/test.jpg");
-        verify(assetMapper).deleteById(1L);
+        verify(assetBatchOperationService).batchDeleteByRefs(List.of("1"));
     }
 
     @Test

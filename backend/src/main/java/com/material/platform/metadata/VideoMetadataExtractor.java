@@ -4,10 +4,10 @@ import org.jcodec.api.FrameGrab;
 import org.jcodec.api.JCodecException;
 import org.jcodec.common.io.NIOUtils;
 import org.jcodec.common.io.SeekableByteChannel;
-import org.jcodec.common.model.Packet;
 import org.jcodec.common.model.Picture;
-import org.jcodec.demux.Demuxer;
-import org.jcodec.demux.DemuxerTrack;
+import org.jcodec.common.Demuxer;
+import org.jcodec.common.DemuxerTrack;
+import org.jcodec.containers.mp4.demuxer.MP4Demuxer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -103,31 +103,16 @@ public class VideoMetadataExtractor implements MetadataExtractor {
         SeekableByteChannel ch = null;
         try {
             ch = NIOUtils.readableChannel(file);
-            Demuxer demuxer = new Demuxer(ch);
-            
-            DemuxerTrack videoTrack = null;
-            for (DemuxerTrack track : demuxer.getTracks()) {
-                if (track.getMeta().getCodec() != null) {
-                    videoTrack = track;
-                    break;
-                }
-            }
-            
+            Demuxer demuxer = MP4Demuxer.createMP4Demuxer(ch);
+
+            DemuxerTrack videoTrack = demuxer.getVideoTracks().isEmpty()
+                    ? null
+                    : demuxer.getVideoTracks().get(0);
             if (videoTrack == null) {
                 return 0;
             }
-            
-            double totalDuration = 0;
-            Packet packet;
-            while ((packet = videoTrack.nextFrame()) != null) {
-                totalDuration += packet.getDuration();
-            }
-            
-            double fps = videoTrack.getMeta().getTotalDuration() > 0 
-                ? (double) videoTrack.getMeta().getTotalFrames() / videoTrack.getMeta().getTotalDuration() 
-                : 25.0;
-            
-            return totalDuration / fps;
+
+            return Math.max(0, videoTrack.getMeta().getTotalDuration());
         } finally {
             NIOUtils.closeQuietly(ch);
         }

@@ -47,6 +47,7 @@ public class AssetService {
     private final StorageService storageService;
     private final MetadataExtractorFactory metadataExtractorFactory;
     private final FolderService folderService;
+    private final AssetBatchOperationService assetBatchOperationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public Asset uploadAsset(MultipartFile file, Long folderId, String relativePath, String uploadedBy) throws IOException {
@@ -91,15 +92,8 @@ public class AssetService {
             throw new RuntimeException("素材不存在，ID: " + id);
         }
 
-        try {
-            storageService.delete(asset.getStorageKey());
-            log.info("素材删除成功: ID={}, 文件={}", id, asset.getOriginalName());
-        } catch (IOException e) {
-            log.error("删除素材文件失败: ID={}, 错误={}", id, e.getMessage(), e);
-            throw new RuntimeException("删除文件失败: " + e.getMessage(), e);
-        }
-
-        assetMapper.deleteById(id);
+        assetBatchOperationService.batchDeleteByRefs(List.of(String.valueOf(id)));
+        log.info("素材删除成功: ID={}, 文件={}", id, asset.getOriginalName());
     }
 
     public Asset updateAsset(Long id, String originalName, Long folderId) {
@@ -226,15 +220,8 @@ public class AssetService {
     public void deleteAsset(String assetRef) {
         Asset asset = requireAsset(assetRef);
 
-        try {
-            storageService.delete(asset.getStorageKey());
-            log.info("绱犳潗鍒犻櫎鎴愬姛: ID={}, 鏂囦欢={}", asset.getId(), asset.getOriginalName());
-        } catch (IOException e) {
-            log.error("鍒犻櫎绱犳潗鏂囦欢澶辫触: ID={}, 閿欒={}", asset.getId(), e.getMessage(), e);
-            throw new RuntimeException("鍒犻櫎鏂囦欢澶辫触: " + e.getMessage(), e);
-        }
-
-        assetMapper.deleteById(asset.getId());
+        assetBatchOperationService.batchDeleteByRefs(List.of(assetRef));
+        log.info("素材删除成功: ID={}, 文件={}", asset.getId(), asset.getOriginalName());
     }
 
     public Asset updateAsset(String assetRef, String originalName, Long folderId) {
@@ -251,6 +238,15 @@ public class AssetService {
         assetMapper.updateById(asset);
         log.info("绱犳潗鏇存柊鎴愬姛: ID={}, 鏂版枃浠跺す={}", asset.getId(), folderId);
         return asset;
+    }
+
+    public int batchMoveAssets(List<String> assetRefs, Long folderId) {
+        folderService.requireFolder(folderId);
+        return assetBatchOperationService.batchMoveByRefs(assetRefs, folderId);
+    }
+
+    public int batchDeleteAssets(List<String> assetRefs) {
+        return assetBatchOperationService.batchDeleteByRefs(assetRefs);
     }
 
     public Asset reExtractMetadata(String assetRef) {

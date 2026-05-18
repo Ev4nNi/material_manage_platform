@@ -13,7 +13,7 @@ public class MybatisPlusConfig {
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor(DbType.SQLITE);
-        paginationInterceptor.setMaxLimit(100L);
+        paginationInterceptor.setMaxLimit(500L);
         paginationInterceptor.setOverflow(false);
         interceptor.addInnerInterceptor(paginationInterceptor);
         return interceptor;
