@@ -57,7 +57,8 @@ public class FolderController {
     }
 
     @GetMapping("/tree")
-    public Result<List<FolderTreeNode>> getFolderTree() {
-        return Result.success(folderService.listFolderTree());
+    public Result<List<FolderTreeNode>> getFolderTree(@RequestParam(defaultValue = "name") String sortBy,
+                                                      @RequestParam(defaultValue = "desc") String sortOrder) {
+        return Result.success(folderService.listFolderTree(sortBy, sortOrder));
     }
 }

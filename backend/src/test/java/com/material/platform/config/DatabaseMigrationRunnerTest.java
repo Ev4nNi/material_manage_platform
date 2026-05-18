@@ -64,6 +64,10 @@ class DatabaseMigrationRunnerTest {
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, 1L, "legacy.jpg", "2026/05/06/legacy.jpg", "image", 123L, "2026-05-06", "{}");
         jdbcTemplate.update("""
+                INSERT INTO folders(id, name, parent_id, created_at)
+                VALUES (?, ?, ?, ?)
+                """, 1L, "20260506", 0L, "2026-05-06 10:00:00");
+        jdbcTemplate.update("""
                 INSERT INTO users(username, password_hash, display_name)
                 VALUES (?, ?, ?)
                 """, "admin", "hash", "Administrator");
@@ -80,6 +84,13 @@ class DatabaseMigrationRunnerTest {
         assertTrue(hasColumn(assetColumns, "public_id"));
         assertTrue(hasColumn(assetColumns, "uploaded_by"));
 
+        List<Map<String, Object>> folderColumns = jdbcTemplate.queryForList("PRAGMA table_info(folders)");
+        assertTrue(hasColumn(folderColumns, "updated_at"));
+        Map<String, Object> migratedFolder = jdbcTemplate.queryForMap(
+                "SELECT updated_at FROM folders WHERE id = 1"
+        );
+        assertEquals("2026-05-06 10:00:00", migratedFolder.get("updated_at"));
+
         Map<String, Object> migratedAsset = jdbcTemplate.queryForMap(
                 "SELECT public_id, uploaded_by FROM assets WHERE id = 1"
         );
@@ -90,6 +101,9 @@ class DatabaseMigrationRunnerTest {
         List<Map<String, Object>> assetIndexes = jdbcTemplate.queryForList("PRAGMA index_list(assets)");
         assertTrue(assetIndexes.stream().anyMatch(index -> "idx_assets_public_id".equals(index.get("name"))));
         assertTrue(assetIndexes.stream().anyMatch(index -> "idx_assets_uploaded_by".equals(index.get("name"))));
+
+        List<Map<String, Object>> folderIndexes = jdbcTemplate.queryForList("PRAGMA index_list(folders)");
+        assertTrue(folderIndexes.stream().anyMatch(index -> "idx_folders_updated_at".equals(index.get("name"))));
     }
 
     private boolean hasColumn(List<Map<String, Object>> columns, String columnName) {

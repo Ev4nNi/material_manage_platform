@@ -1,10 +1,11 @@
 import request from './request'
 
 export default {
-  getTree() {
+  getTree(params = {}) {
     return request({
       url: '/folders/tree',
-      method: 'get'
+      method: 'get',
+      params
     })
   },
 

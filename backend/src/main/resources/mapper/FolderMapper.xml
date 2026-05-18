@@ -7,6 +7,7 @@
         <result column="name" property="name"/>
         <result column="parent_id" property="parentId"/>
         <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
     <select id="selectDescendantIds" resultType="long">

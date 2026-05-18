@@ -166,7 +166,7 @@ public class AssetService {
     private LambdaQueryWrapper<Asset> buildAssetQueryWrapper(Long folderId, String startDate, String endDate, String fileType, String uploadedBy, String fileName) {
         LambdaQueryWrapper<Asset> wrapper = new LambdaQueryWrapper<Asset>()
                 .eq(Asset::getFolderId, folderId)
-                .orderByDesc(Asset::getCreatedAt);
+                .orderByDesc(Asset::getOriginalName);
         if (startDate != null && !startDate.isBlank()) {
             wrapper.ge(Asset::getUploadDate, startDate.trim());
         }
@@ -193,7 +193,7 @@ public class AssetService {
         LambdaQueryWrapper<Asset> wrapper = new LambdaQueryWrapper<Asset>()
                 .ge(Asset::getUploadDate, startDate)
                 .le(Asset::getUploadDate, endDate)
-                .orderByDesc(Asset::getCreatedAt);
+                .orderByDesc(Asset::getOriginalName);
         Page<Asset> page = new Page<>(pageNum, pageSize);
         IPage<Asset> result = assetMapper.selectPage(page, wrapper);
         return PageResult.of(result.getRecords(), result.getTotal(), pageNum, pageSize);
@@ -304,7 +304,7 @@ public class AssetService {
         asset.setStorageKey(storageKey);
         asset.setFileType(determineFileType(extension));
         asset.setFileSize(file.getSize());
-        asset.setUploadDate(LocalDate.now().format(DISPLAY_DATE_FORMAT));
+        asset.setUploadDate(extractDateFromFileName(displayFileName));
         asset.setMetadata(metadataJson);
         asset.setUploadedBy(uploadedBy != null ? uploadedBy : "admin");
 
@@ -356,5 +356,32 @@ public class AssetService {
             return "";
         }
         return fileName.substring(lastDotIndex + 1).toLowerCase();
+    }
+
+    private String extractDateFromFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return LocalDate.now().format(DISPLAY_DATE_FORMAT);
+        }
+
+        String dateRegex = "(\\d{4}[-./]?\\d{2}[-./]?\\d{2})";
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(dateRegex);
+        java.util.regex.Matcher matcher = pattern.matcher(fileName);
+
+        if (matcher.find()) {
+            String dateStr = matcher.group(1).replace("/", "-").replace(".", "-");
+            try {
+                LocalDate extractedDate = LocalDate.parse(dateStr, DISPLAY_DATE_FORMAT);
+                return extractedDate.format(DISPLAY_DATE_FORMAT);
+            } catch (Exception e) {
+                try {
+                    LocalDate extractedDate = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                    return extractedDate.format(DISPLAY_DATE_FORMAT);
+                } catch (Exception ex) {
+                    log.warn("从文件名提取日期失败: {}, 错误: {}", fileName, ex.getMessage());
+                }
+            }
+        }
+
+        return LocalDate.now().format(DISPLAY_DATE_FORMAT);
     }
 }

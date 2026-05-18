@@ -20,6 +20,7 @@ public class DatabaseMigrationRunner {
         migrateUsersRoleColumn();
         migrateAssetsUploadedByColumn();
         migrateAssetsPublicIdColumn();
+        migrateFoldersUpdatedAtColumn();
     }
 
     private void migrateUsersRoleColumn() {
@@ -71,5 +72,23 @@ public class DatabaseMigrationRunner {
         }
 
         jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_public_id ON assets(public_id)");
+    }
+
+    private void migrateFoldersUpdatedAtColumn() {
+        List<Map<String, Object>> columns = jdbcTemplate.queryForList("PRAGMA table_info(folders)");
+        boolean hasUpdatedAtColumn = columns.stream()
+                .map(column -> String.valueOf(column.get("name")))
+                .anyMatch("updated_at"::equalsIgnoreCase);
+
+        if (!hasUpdatedAtColumn) {
+            jdbcTemplate.execute("ALTER TABLE folders ADD COLUMN updated_at DATETIME");
+        }
+
+        jdbcTemplate.execute("""
+                UPDATE folders
+                SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+                WHERE updated_at IS NULL OR updated_at = ''
+                """);
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_folders_updated_at ON folders(updated_at)");
     }
 }

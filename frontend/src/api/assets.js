@@ -9,13 +9,14 @@ export default {
     })
   },
 
-  uploadAsset(formData, onUploadProgress) {
+  uploadAsset(formData, onUploadProgress, signal) {
     return request({
       url: '/assets/upload',
       method: 'post',
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress
+      onUploadProgress,
+      signal
     })
   },
 

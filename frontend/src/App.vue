@@ -88,12 +88,24 @@
           <div class="folder-panel-header">
             <div>
               <p class="small-label">Folder Tree</p>
-              <h3>文件夹</h3>
+              <h3>???</h3>
             </div>
-            <el-button type="primary" @click="createRootFolder">
-              <el-icon><Plus /></el-icon>
-              新建
-            </el-button>
+            <div class="folder-panel-actions">
+              <el-select v-model="folderSortBy" class="folder-sort-select" @change="handleFolderSortChange">
+                <el-option label="??" value="name" />
+                <el-option label="????" value="createdAt" />
+                <el-option label="??????" value="updatedAt" />
+              </el-select>
+              <el-button class="folder-sort-toggle" @click="toggleFolderSortOrder">
+                <el-icon>
+                  <component :is="folderSortOrder === 'asc' ? SortUp : SortDown" />
+                </el-icon>
+              </el-button>
+              <el-button type="primary" @click="createRootFolder">
+                <el-icon><Plus /></el-icon>
+                ??
+              </el-button>
+            </div>
           </div>
 
           <el-empty v-if="folderTree.length === 0" description="暂无文件夹">
@@ -110,6 +122,8 @@
             :expand-on-click-node="false"
             @node-click="handleNodeClick"
             @node-contextmenu="handleContextMenu"
+            @node-expand="handleFolderNodeExpand"
+            @node-collapse="handleFolderNodeCollapse"
           >
             <template #default="{ node }">
               <div class="folder-node">
@@ -227,12 +241,18 @@
                     @keyup.enter="handlePreview(row)"
                   >
                     <img
-                      v-if="isImage(row.fileType)"
+                      v-if="isImage(row.fileType) && visiblePreviewRefs.has(row.id)"
                       :src="previewUrl(row)"
                       :alt="row.originalName"
                       class="asset-preview-media"
                       loading="lazy"
                     />
+                    <div
+                      v-else-if="isImage(row.fileType) && !visiblePreviewRefs.has(row.id)"
+                      class="asset-preview-thumb"
+                    >
+                      <span class="asset-preview-placeholder">加载中...</span>
+                    </div>
                     <video
                       v-else-if="isVideo(row.fileType)"
                       :src="previewUrl(row)"
@@ -493,6 +513,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { SortUp, SortDown } from '@element-plus/icons-vue'
 import authApi from './api/auth'
 import assetApi from './api/assets'
 import folderApi from './api/folders'
@@ -500,6 +521,10 @@ import usersApi from './api/users'
 
 const MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 const SUPPORTED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'avi', 'mov', 'mkv', 'webm'])
+const UPLOAD_CONCURRENCY = 3
+const PREVIEW_INITIAL_BATCH_SIZE = 8
+const PREVIEW_BATCH_SIZE = 6
+const PREVIEW_BATCH_DELAY = 220
 
 const treeRef = ref(null)
 const tableRef = ref(null)
@@ -517,11 +542,17 @@ const loginForm = reactive({
 
 const folderTree = ref([])
 const currentFolderId = ref(null)
+const folderSortBy = ref('name')
+const folderSortOrder = ref('desc')
+const expandedFolderIds = ref(new Set())
 const assetList = ref([])
 const tableLoading = ref(false)
 const selectedAssets = ref([])
 const uploading = ref(false)
 const uploadProgressText = ref('')
+const visiblePreviewRefs = ref(new Set())
+let previewQueue = []
+let previewQueueTimer = null
 
 const dateRange = ref([])
 const filterFileType = ref('')
@@ -588,12 +619,17 @@ const moveDisabledFolderIds = computed(() => new Set(currentMoveAssets.value.map
 onMounted(async () => {
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('auth-expired', handleAuthExpired)
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('pagehide', handlePageUnload)
   await initializeSession()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeContextMenu)
   window.removeEventListener('auth-expired', handleAuthExpired)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('pagehide', handlePageUnload)
+  handlePageUnload()
 })
 
 async function initializeSession() {
@@ -660,7 +696,11 @@ function resetWorkspace() {
   activeView.value = 'assets'
   folderTree.value = []
   currentFolderId.value = null
+  folderSortBy.value = 'name'
+  folderSortOrder.value = 'desc'
+  expandedFolderIds.value = new Set()
   assetList.value = []
+  clearPreviewLoading()
   selectedAssets.value = []
   userList.value = []
   uploadProgressText.value = ''
@@ -686,7 +726,7 @@ async function refreshCurrentView() {
 }
 
 async function loadFolderTree() {
-  const res = await folderApi.getTree()
+  const res = await folderApi.getTree({ sortBy: folderSortBy.value, sortOrder: folderSortOrder.value })
   folderTree.value = res.data || []
 
   if (folderTree.value.length === 0) {
@@ -700,6 +740,7 @@ async function loadFolderTree() {
   }
 
   await nextTick()
+  restoreFolderTreeState()
   if (treeRef.value && currentFolderId.value) {
     treeRef.value.setCurrentKey(currentFolderId.value)
   }
@@ -709,6 +750,7 @@ async function loadFolderTree() {
 async function loadAssets() {
   if (!currentFolderId.value) {
     assetList.value = []
+    clearPreviewLoading()
     return
   }
 
@@ -740,6 +782,7 @@ async function loadAssets() {
       assetList.value = []
       pagination.value.total = 0
     }
+    queuePreviewLoading()
   } finally {
     tableLoading.value = false
   }
@@ -772,6 +815,43 @@ function handleNodeClick(data) {
   currentFolderId.value = data.id
   pagination.value.pageNum = 1
   loadAssets()
+}
+
+function handleFolderNodeExpand(data) {
+  if (!data?.id) {
+    return
+  }
+  expandedFolderIds.value = new Set(expandedFolderIds.value).add(data.id)
+}
+
+function handleFolderNodeCollapse(data) {
+  if (!data?.id) {
+    return
+  }
+  const nextExpanded = new Set(expandedFolderIds.value)
+  nextExpanded.delete(data.id)
+  expandedFolderIds.value = nextExpanded
+}
+
+function handleFolderSortChange() {
+  pagination.value.pageNum = 1
+  loadFolderTree()
+}
+
+function toggleFolderSortOrder() {
+  folderSortOrder.value = folderSortOrder.value === 'asc' ? 'desc' : 'asc'
+  pagination.value.pageNum = 1
+  loadFolderTree()
+}
+
+function restoreFolderTreeState() {
+  if (!treeRef.value) {
+    return
+  }
+  for (const folderId of expandedFolderIds.value) {
+    const node = treeRef.value.getNode(folderId)
+    node?.expand?.()
+  }
 }
 
 function handleContextMenu(event, data) {
@@ -1068,28 +1148,15 @@ async function uploadPickedFiles(files) {
     return
   }
 
-  uploading.value = true
-  try {
-    for (let index = 0; index < validFiles.length; index += 1) {
-      const file = validFiles[index]
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', String(currentFolderId.value))
-
-      await assetApi.uploadAsset(formData, event => {
-        const percent = Math.round((event.progress || 0) * 100)
-        uploadProgressText.value = `上传 ${index + 1}/${validFiles.length}：${file.name} ${percent}%`
-      })
-    }
-    uploadProgressText.value = ''
-    await loadAssets()
-    ElMessage.success(`成功上传 ${validFiles.length} 个文件`)
-  } catch (error) {
-    ElMessage.error(error.message || '文件上传失败')
-  } finally {
-    uploading.value = false
-    uploadProgressText.value = ''
-  }
+  await uploadFilesWithConcurrency(validFiles, file => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folderId', String(currentFolderId.value))
+    return formData
+  }, (file, progress) => `上传 ${file.name}`, {
+    successText: count => `成功上传 ${count} 个文件`,
+    refresh: loadAssets
+  })
 }
 
 async function uploadPickedDirectory(files) {
@@ -1098,29 +1165,137 @@ async function uploadPickedDirectory(files) {
     return
   }
 
-  uploading.value = true
-  try {
-    for (let index = 0; index < validFiles.length; index += 1) {
-      const file = validFiles[index]
-      const relativePath = file.webkitRelativePath || file.name
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', String(currentFolderId.value))
-      formData.append('relativePath', relativePath)
+  await uploadFilesWithConcurrency(validFiles, file => {
+    const relativePath = file.webkitRelativePath || file.name
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folderId', String(currentFolderId.value))
+    formData.append('relativePath', relativePath)
+    return formData
+  }, (file, progress) => `目录上传 ${file.webkitRelativePath || file.name}`, {
+    successText: count => `目录上传完成，共处理 ${count} 个文件`,
+    refresh: loadFolderTree
+  })
+}
 
-      await assetApi.uploadAsset(formData, event => {
-        const percent = Math.round((event.progress || 0) * 100)
-        uploadProgressText.value = `目录上传 ${index + 1}/${validFiles.length}：${relativePath} ${percent}%`
-      })
+async function legacyUploadPickedFiles(files) {
+  const validFiles = collectValidFiles(files)
+  if (validFiles.length === 0) {
+    return
+  }
+
+  const folderId = currentFolderId.value
+  await uploadFilesWithConcurrency(validFiles, file => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folderId', String(folderId))
+    return formData
+  }, (file, progress) => `上传 ${file.name} ${progress}%`, {
+    successText: count => `成功上传 ${count} 个文件`,
+    refresh: loadAssets
+  })
+}
+
+async function legacyUploadPickedDirectory(files) {
+  const validFiles = collectValidFiles(files)
+  if (validFiles.length === 0) {
+    return
+  }
+
+  const folderId = currentFolderId.value
+  await uploadFilesWithConcurrency(validFiles, file => {
+    const relativePath = file.webkitRelativePath || file.name
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folderId', String(folderId))
+    formData.append('relativePath', relativePath)
+    return formData
+  }, (file, progress) => `目录上传 ${file.webkitRelativePath || file.name} ${progress}%`, {
+    successText: count => `目录上传完成，共处理 ${count} 个文件`,
+    refresh: loadFolderTree
+  })
+}
+
+async function uploadFilesWithConcurrency(files, buildFormData, progressLabel, options = {}) {
+  uploading.value = true
+  uploadAbortController = new AbortController()
+  const refresh = options.refresh || loadAssets
+  const successText = options.successText || (count => `成功处理 ${count} 个文件`)
+  const concurrency = Math.min(UPLOAD_CONCURRENCY, files.length)
+  let nextIndex = 0
+  let completed = 0
+  let failed = 0
+  const errors = []
+
+  try {
+    const workers = Array.from({ length: concurrency }, async () => {
+      while (true) {
+        const currentIndex = nextIndex
+        nextIndex += 1
+        if (currentIndex >= files.length) {
+          break
+        }
+
+        if (uploadAbortController.signal.aborted) {
+          break
+        }
+
+        const file = files[currentIndex]
+        try {
+          const formData = buildFormData(file)
+          await assetApi.uploadAsset(formData, event => {
+            const percent = Math.round((event.progress || 0) * 100)
+            uploadProgressText.value = `${progressLabel(file, percent)} ${completed + failed + 1}/${files.length}`
+          }, uploadAbortController.signal)
+          completed += 1
+        } catch (error) {
+          if (error.name === 'AbortError' || error.name === 'CanceledError') {
+            break
+          }
+          failed += 1
+          errors.push(error)
+        }
+      }
+    })
+
+    await Promise.all(workers)
+
+    if (uploadAbortController.signal.aborted) {
+      ElMessage.info('上传已取消')
+      return
     }
-    await loadFolderTree()
-    ElMessage.success(`目录上传完成，共处理 ${validFiles.length} 个文件`)
+
+    uploadProgressText.value = ''
+    await refresh()
+
+    if (completed > 0) {
+      ElMessage.success(successText(completed))
+    }
+    if (failed > 0) {
+      ElMessage.warning(`有 ${failed} 个文件上传失败`)
+    }
+    if (completed === 0 && failed > 0) {
+      throw errors[0] || new Error('上传失败')
+    }
   } catch (error) {
-    ElMessage.error(error.message || '文件夹上传失败')
+    if (error.name === 'AbortError' || error.name === 'CanceledError') {
+      ElMessage.info('上传已取消')
+      return
+    }
+    ElMessage.error(error.message || '文件上传失败')
   } finally {
     uploading.value = false
     uploadProgressText.value = ''
+    uploadAbortController = null
   }
+}
+
+function handleBeforeUnload(event) {
+  if (!uploading.value) {
+    return
+  }
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 function ensureFolderSelected() {
@@ -1373,6 +1548,68 @@ function previewUrl(asset) {
   return `/api/assets/${assetRef(asset)}/preview`
 }
 
+let uploadAbortController = null
+
+function queuePreviewLoading() {
+  clearPreviewLoading()
+
+  if (!assetList.value || assetList.value.length === 0) {
+    return
+  }
+
+  const imageAssets = assetList.value.filter(asset => isImage(asset.fileType))
+  if (imageAssets.length === 0) {
+    return
+  }
+
+  previewQueue = [...imageAssets]
+
+  const processBatch = () => {
+    if (previewQueue.length === 0) {
+      return
+    }
+
+    const batch = previewQueue.splice(0, PREVIEW_BATCH_SIZE)
+    batch.forEach(asset => {
+      if (asset?.id) {
+        visiblePreviewRefs.value.add(asset.id)
+      }
+    })
+
+    if (previewQueue.length > 0) {
+      previewQueueTimer = setTimeout(processBatch, PREVIEW_BATCH_DELAY)
+    }
+  }
+
+  const initialBatch = previewQueue.splice(0, PREVIEW_INITIAL_BATCH_SIZE)
+  initialBatch.forEach(asset => {
+    if (asset?.id) {
+      visiblePreviewRefs.value.add(asset.id)
+    }
+  })
+
+  if (previewQueue.length > 0) {
+    previewQueueTimer = setTimeout(processBatch, PREVIEW_BATCH_DELAY)
+  }
+}
+
+function clearPreviewLoading() {
+  if (previewQueueTimer) {
+    clearTimeout(previewQueueTimer)
+    previewQueueTimer = null
+  }
+  previewQueue = []
+  visiblePreviewRefs.value = new Set()
+}
+
+function handlePageUnload() {
+  if (uploadAbortController) {
+    uploadAbortController.abort()
+    uploadAbortController = null
+  }
+  clearPreviewLoading()
+}
+
 function getUploaderDisplayName(username) {
   if (!username) return '-'
   const user = allUsers.value.find(u => u.username === username)
@@ -1577,9 +1814,27 @@ function getUploaderDisplayName(username) {
 
 .folder-panel-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   margin-bottom: 18px;
+}
+
+.folder-panel-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.folder-sort-select {
+  min-width: 0;
+}
+
+.folder-sort-toggle {
+  width: 38px;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .folder-panel-header h3,

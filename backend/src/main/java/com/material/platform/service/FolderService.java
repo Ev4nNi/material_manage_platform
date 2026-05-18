@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -23,10 +24,12 @@ public class FolderService {
     private final AssetBatchOperationService assetBatchOperationService;
 
     public Folder createFolder(String name, Long parentId) {
+        LocalDateTime now = LocalDateTime.now();
         Folder folder = new Folder();
         folder.setName(name);
         folder.setParentId(parentId);
-        folder.setCreatedAt(LocalDateTime.now());
+        folder.setCreatedAt(now);
+        folder.setUpdatedAt(now);
         folderMapper.insert(folder);
         return folder;
     }
@@ -54,6 +57,7 @@ public class FolderService {
         if (parentId != null) {
             folder.setParentId(parentId);
         }
+        folder.setUpdatedAt(LocalDateTime.now());
         folderMapper.updateById(folder);
         return folder;
     }
@@ -67,6 +71,10 @@ public class FolderService {
     }
 
     public List<FolderTreeNode> listFolderTree() {
+        return listFolderTree("name", "desc");
+    }
+
+    public List<FolderTreeNode> listFolderTree(String sortBy, String sortOrder) {
         List<Folder> allFolders = folderMapper.selectList(
                 new LambdaQueryWrapper<Folder>().orderByAsc(Folder::getCreatedAt, Folder::getId)
         );
@@ -74,7 +82,7 @@ public class FolderService {
         for (Folder folder : allFolders) {
             childrenByParent.computeIfAbsent(folder.getParentId(), key -> new ArrayList<>()).add(folder);
         }
-        return buildTree(0L, childrenByParent);
+        return buildTree(0L, childrenByParent, normalizeSortBy(sortBy), normalizeSortOrder(sortOrder));
     }
 
     public Folder requireFolder(Long id) {
@@ -123,10 +131,9 @@ public class FolderService {
         return currentParentId;
     }
 
-    private List<FolderTreeNode> buildTree(Long parentId, Map<Long, List<Folder>> childrenByParent) {
+    private List<FolderTreeNode> buildTree(Long parentId, Map<Long, List<Folder>> childrenByParent, String sortBy, String sortOrder) {
         List<Folder> children = new ArrayList<>(childrenByParent.getOrDefault(parentId, List.of()));
-        children.sort(Comparator.comparing(Folder::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(Folder::getId));
+        children.sort(buildComparator(sortBy, sortOrder));
 
         List<FolderTreeNode> result = new ArrayList<>();
         for (Folder folder : children) {
@@ -135,11 +142,49 @@ public class FolderService {
             node.setName(folder.getName());
             node.setParentId(folder.getParentId());
 
-            List<FolderTreeNode> childNodes = buildTree(folder.getId(), childrenByParent);
+            List<FolderTreeNode> childNodes = buildTree(folder.getId(), childrenByParent, sortBy, sortOrder);
             node.setChildren(childNodes);
             node.setLeaf(childNodes.isEmpty());
             result.add(node);
         }
         return result;
+    }
+
+    private Comparator<Folder> buildComparator(String sortBy, String sortOrder) {
+        Comparator<Folder> comparator = switch (sortBy) {
+            case "createdAt" -> Comparator.comparing(Folder::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
+            case "updatedAt" -> Comparator.comparing(
+                    folder -> folder.getUpdatedAt() != null ? folder.getUpdatedAt() : folder.getCreatedAt(),
+                    Comparator.nullsLast(Comparator.naturalOrder())
+            );
+            case "name" -> Comparator.comparing(
+                    folder -> folder.getName() == null ? "" : folder.getName().toLowerCase(Locale.ROOT)
+            );
+            default -> Comparator.comparing(
+                    folder -> folder.getName() == null ? "" : folder.getName().toLowerCase(Locale.ROOT)
+            );
+        };
+
+        if ("desc".equals(sortOrder)) {
+            comparator = comparator.reversed();
+        }
+        return comparator.thenComparing(Folder::getId);
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if ("createdAt".equalsIgnoreCase(sortBy)) {
+            return "createdAt";
+        }
+        if ("updatedAt".equalsIgnoreCase(sortBy)) {
+            return "updatedAt";
+        }
+        return "name";
+    }
+
+    private String normalizeSortOrder(String sortOrder) {
+        if ("desc".equalsIgnoreCase(sortOrder)) {
+            return "desc";
+        }
+        return "asc";
     }
 }
