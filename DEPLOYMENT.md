@@ -95,7 +95,7 @@ $frontendFiles = @(
     '.\frontend\vite.config.js'
 )
 Copy-Item -Path $frontendFiles -Destination .\deploy-package\frontend -Force
-Copy-Item -Path .\frontend\src\* -Destination .\deploy-package\frontend\src -Recurse -Force
+Copy-Item -Path .\frontend\src -Destination .\deploy-package\frontend\src -Recurse -Force
 
 # 4. 生成压缩包
 tar -czvf .\material_manage_platform.tar.gz -C .\deploy-package .
@@ -112,7 +112,7 @@ cd /data2/material_manage_platform
 mkdir -p storage db logs deploy-package
 tar -xzvf material_manage_platform.tar.gz -C deploy-package
 cd deploy-package
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 验证：
@@ -163,4 +163,3 @@ docker logs material-frontend
 ```bash
 ls -la /data2/material_manage_platform/
 ```
-
