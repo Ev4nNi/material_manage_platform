@@ -88,13 +88,13 @@
           <div class="folder-panel-header">
             <div>
               <p class="small-label">Folder Tree</p>
-              <h3>???</h3>
+              <h3>{{ folderPanelTitle }}</h3>
             </div>
             <div class="folder-panel-actions">
               <el-select v-model="folderSortBy" class="folder-sort-select" @change="handleFolderSortChange">
-                <el-option label="??" value="name" />
-                <el-option label="????" value="createdAt" />
-                <el-option label="??????" value="updatedAt" />
+                <el-option :label="folderSortNameLabel" value="name" />
+                <el-option :label="folderSortCreatedAtLabel" value="createdAt" />
+                <el-option :label="folderSortUpdatedAtLabel" value="updatedAt" />
               </el-select>
               <el-button class="folder-sort-toggle" @click="toggleFolderSortOrder">
                 <el-icon>
@@ -103,7 +103,7 @@
               </el-button>
               <el-button type="primary" @click="createRootFolder">
                 <el-icon><Plus /></el-icon>
-                ??
+                {{ createFolderButtonLabel }}
               </el-button>
             </div>
           </div>
@@ -525,6 +525,11 @@ const UPLOAD_CONCURRENCY = 3
 const PREVIEW_INITIAL_BATCH_SIZE = 8
 const PREVIEW_BATCH_SIZE = 6
 const PREVIEW_BATCH_DELAY = 220
+const folderPanelTitle = '\u6587\u4ef6\u5939'
+const folderSortNameLabel = '\u540d\u79f0'
+const folderSortCreatedAtLabel = '\u521b\u5efa\u65f6\u95f4'
+const folderSortUpdatedAtLabel = '\u6700\u8fd1\u66f4\u65b0\u65f6\u95f4'
+const createFolderButtonLabel = '\u65b0\u5efa'
 
 const treeRef = ref(null)
 const tableRef = ref(null)
