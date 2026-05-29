@@ -1,10 +1,15 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
     container_name: material-backend
     restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1.0
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     ports:
       - "8081:8080"
     environment:
@@ -12,6 +17,7 @@ services:
       - STORAGE_PATH=/data/storage
       - DB_PATH=/data/db/material.db
       - LOG_PATH=/data/logs/application.log
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx384m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=128m -Xss512k -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/logs/heapdump.hprof -XX:+ExitOnOutOfMemoryError
     volumes:
       - /data2/material_manage_platform/storage:/data/storage
       - /data2/material_manage_platform/db:/data/db
@@ -29,6 +35,9 @@ services:
     build: ./frontend
     container_name: material-frontend
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
     ports:
       - "3001:80"
     depends_on:

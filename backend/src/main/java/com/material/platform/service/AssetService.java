@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -125,13 +126,14 @@ public class AssetService {
         MetadataExtractor extractor = metadataExtractorFactory.getExtractor(asset.getOriginalName());
         if (extractor != null) {
             try {
-                java.io.InputStream inputStream = storageService.getFile(asset.getStorageKey()).toURI().toURL().openStream();
-                Map<String, Object> metadata = extractor.extract(inputStream, asset.getOriginalName());
-                if (metadata != null && !metadata.isEmpty()) {
-                    metadataJson = objectMapper.writeValueAsString(metadata);
-                    log.info("元数据重新提取成功: ID={}, 元数据={}", id, metadataJson);
-                } else {
-                    log.warn("元数据提取结果为空: ID={}", id);
+                try (InputStream inputStream = storageService.getFile(asset.getStorageKey()).toURI().toURL().openStream()) {
+                    Map<String, Object> metadata = extractor.extract(inputStream, asset.getOriginalName());
+                    if (metadata != null && !metadata.isEmpty()) {
+                        metadataJson = objectMapper.writeValueAsString(metadata);
+                        log.info("元数据重新提取成功: ID={}, 元数据={}", id, metadataJson);
+                    } else {
+                        log.warn("元数据提取结果为空: ID={}", id);
+                    }
                 }
             } catch (Exception e) {
                 log.error("重新提取元数据失败: ID={}, 错误: {}", id, e.getMessage(), e);
@@ -287,8 +289,8 @@ public class AssetService {
         String metadataJson = "{}";
         MetadataExtractor extractor = metadataExtractorFactory.getExtractor(displayFileName);
         if (extractor != null) {
-            try {
-                Map<String, Object> metadata = extractor.extract(file.getInputStream(), displayFileName);
+            try (InputStream inputStream = file.getInputStream()) {
+                Map<String, Object> metadata = extractor.extract(inputStream, displayFileName);
                 metadataJson = objectMapper.writeValueAsString(metadata);
             } catch (Exception e) {
                 log.warn("提取元数据失败: {}, 错误: {}", displayFileName, e.getMessage());

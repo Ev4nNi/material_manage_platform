@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,11 +31,13 @@ public class LocalStorageServiceImpl implements StorageService {
         Path parentDir = targetPath.getParent();
         if (parentDir != null && !Files.exists(parentDir)) {
             Files.createDirectories(parentDir);
-            log.debug("创建存储目录: {}", parentDir);
+            log.debug("Created storage directory: {}", parentDir);
         }
 
-        Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-        log.info("文件上传成功: {} -> {}", file.getOriginalFilename(), storageKey);
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+        log.info("Uploaded file: {} -> {}", file.getOriginalFilename(), storageKey);
         return storageKey;
     }
 
@@ -46,9 +49,9 @@ public class LocalStorageServiceImpl implements StorageService {
 
         boolean deleted = Files.deleteIfExists(filePath);
         if (deleted) {
-            log.info("文件删除成功: {}", storageKey);
+            log.info("Deleted file: {}", storageKey);
         } else {
-            log.warn("文件不存在，跳过删除: {}", storageKey);
+            log.warn("File did not exist, skipping delete: {}", storageKey);
         }
     }
 
@@ -67,10 +70,10 @@ public class LocalStorageServiceImpl implements StorageService {
 
     private void validateStorageKey(String storageKey) {
         if (storageKey == null || storageKey.isBlank()) {
-            throw new IllegalArgumentException("存储键不能为空");
+            throw new IllegalArgumentException("Storage key cannot be blank");
         }
         if (storageKey.contains("..") || storageKey.contains(":")) {
-            throw new IllegalArgumentException("非法的存储键格式");
+            throw new IllegalArgumentException("Invalid storage key format");
         }
     }
 
@@ -79,10 +82,10 @@ public class LocalStorageServiceImpl implements StorageService {
             String normalizedPath = path.normalize().toString();
             String normalizedBase = Paths.get(basePath).normalize().toString();
             if (!normalizedPath.startsWith(normalizedBase)) {
-                throw new SecurityException("路径遍历攻击检测: " + path);
+                throw new SecurityException("Path traversal detected: " + path);
             }
         } catch (Exception e) {
-            throw new SecurityException("路径验证失败: " + e.getMessage(), e);
+            throw new SecurityException("Path validation failed: " + e.getMessage(), e);
         }
     }
 }

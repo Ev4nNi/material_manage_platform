@@ -6,7 +6,7 @@ RUN apk add --no-cache sqlite-libs
 
 COPY target/*.jar app.jar
 
-RUN mkdir -p /data/storage /data/logs
+RUN mkdir -p /data/storage /data/logs /data/db
 
 EXPOSE 8080
 
@@ -18,8 +18,9 @@ ENV LOG_PATH=/data/logs/application.log
 ENV LOG_MAX_SIZE=100MB
 ENV LOG_MAX_HISTORY=30
 ENV MAX_FILE_SIZE=500MB
+ENV JAVA_TOOL_OPTIONS="-Xms256m -Xmx384m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=128m -Xss512k -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/logs/heapdump.hprof -XX:+ExitOnOutOfMemoryError"
 
-ENTRYPOINT ["sh", "-c", "java -jar app.jar \
+ENTRYPOINT ["sh", "-c", "exec java -jar app.jar \
   --server.port=${APP_PORT} \
   --server.address=${APP_HOST} \
   --spring.datasource.url=jdbc:sqlite:${DB_PATH} \
